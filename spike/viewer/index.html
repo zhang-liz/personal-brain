@@ -1,0 +1,971 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Personal Brain</title>
+<!-- WebGL viewer for the FalkorDB "network" graph (your LinkedIn network).
+     three.js r170 (MIT) is vendored in ./vendor so the demo runs with no internet. -->
+<style>
+  :root {
+    color-scheme: dark;
+    --surface-0: #06070d;
+    --panel: rgba(14, 15, 26, 0.78);
+    --panel-border: rgba(255, 255, 255, 0.09);
+    --text-primary: #f0efec;
+    --text-secondary: #c3c2b7;
+    --text-muted: #8d8c85;
+    --accent: #9085e9;
+    /* Categorical node colors, fixed order, validated on --surface-0 (dark). */
+    --series-1: #3987e5; /* Person   */
+    --series-2: #d95926; /* Company  */
+    --series-3: #199e70; /* School   */
+    --series-4: #c98500; /* Event    */
+    --series-5: #d55181; /* Topic    */
+    --series-6: #008300; /* Investor */
+    --series-7: #9085e9; /* Skill    */
+    --series-8: #e66767; /* City     */
+    --me: #f0efec;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--surface-0); color: var(--text-primary);
+    font: 14px/1.4 ui-sans-serif, -apple-system, "Segoe UI", Inter, sans-serif; overflow: hidden; }
+  #stage { position: fixed; inset: 0; }
+  .panel { position: fixed; background: var(--panel); border: 1px solid var(--panel-border);
+    border-radius: 14px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+  #hud { top: 16px; left: 16px; padding: 14px 16px; width: 300px; }
+  #hud h1 { margin: 0; font-size: 18px; letter-spacing: 0.2px; }
+  #hud .sub { color: var(--text-secondary); font-size: 12px; margin-top: 2px; }
+  #hud .stats { display: flex; gap: 14px; margin-top: 10px; }
+  #hud .stat b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+  #hud .stat small { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; }
+  .field { width: 100%; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--panel-border);
+    background: rgba(255,255,255,0.05); color: var(--text-primary); font: inherit; outline: none; }
+  .field:focus { border-color: var(--accent); }
+  #search { margin-top: 12px; position: relative; }
+  #results { position: absolute; top: 40px; left: 0; right: 0; background: #11121d; border: 1px solid var(--panel-border);
+    border-radius: 10px; overflow: hidden; display: none; z-index: 5; }
+  #results button { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 8px 12px;
+    background: none; border: 0; color: var(--text-primary); font: inherit; cursor: pointer; }
+  #results button:hover, #results button.active { background: rgba(144,133,233,0.16); }
+  #results small { color: var(--text-muted); margin-left: auto; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  #layers { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 999px;
+    border: 1px solid var(--panel-border); background: rgba(255,255,255,0.04); color: var(--text-primary);
+    font: inherit; font-size: 12px; cursor: pointer; }
+  .chip small { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .chip.off { opacity: 0.38; }
+  #remember { margin-top: 12px; display: flex; gap: 6px; }
+  #remember .field { font-size: 13px; }
+  #remember button { flex: none; width: 38px; border-radius: 10px; border: 1px solid var(--panel-border);
+    background: rgba(255,255,255,0.04); color: var(--text-secondary); font: inherit; cursor: pointer; }
+  #rememberHint { margin-top: 6px; font-size: 11px; color: var(--text-muted); }
+  #stories { top: 16px; right: 16px; padding: 12px; width: 320px; }
+  #stories h2, #card h2 { margin: 0 0 8px; font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.7px; }
+  .story { display: block; width: 100%; text-align: left; padding: 9px 11px; margin-bottom: 6px; border-radius: 10px;
+    border: 1px solid var(--panel-border); background: rgba(255,255,255,0.03); color: var(--text-primary);
+    font: inherit; cursor: pointer; }
+  .story:hover { border-color: rgba(144,133,233,0.5); }
+  .story.active { border-color: var(--accent); background: rgba(144,133,233,0.14); }
+  .story small { display: block; color: var(--text-muted); font-size: 11px; margin-top: 2px; }
+  #cypher { display: none; margin-top: 8px; }
+  #cypher pre { margin: 0; padding: 10px; border-radius: 10px; background: #0b0c14; border: 1px solid var(--panel-border);
+    color: var(--text-secondary); font: 11px/1.5 ui-monospace, "SF Mono", Menlo, monospace; white-space: pre-wrap;
+    min-height: 60px; max-height: 190px; overflow: auto; }
+  #cypher .meta { margin-top: 6px; font-size: 12px; color: var(--text-secondary); min-height: 17px; }
+  #cypher .meta b { color: var(--text-primary); }
+  #card { display: none; right: 16px; bottom: 84px; width: 320px; padding: 14px; max-height: 46vh; overflow: auto; }
+  #card .name { font-size: 17px; font-weight: 600; }
+  #card .type { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); margin: 4px 0 6px; }
+  #card .headline { color: var(--text-secondary); font-size: 13px; }
+  #card .group { margin-top: 10px; }
+  #card .group h3 { margin: 0 0 4px; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; font-weight: 500; }
+  #card .group button { display: inline-block; margin: 0 4px 4px 0; padding: 3px 8px; border-radius: 999px; font: inherit; font-size: 12px;
+    border: 1px solid var(--panel-border); background: rgba(255,255,255,0.04); color: var(--text-primary); cursor: pointer; }
+  #controls { left: 50%; bottom: 16px; transform: translateX(-50%); padding: 6px; display: flex; gap: 4px; align-items: center; }
+  #controls button { padding: 8px 12px; border-radius: 10px; border: 0; background: transparent; color: var(--text-secondary);
+    font: inherit; cursor: pointer; white-space: nowrap; }
+  #controls button.on { background: rgba(144,133,233,0.22); color: var(--text-primary); }
+  #controls .sep { width: 1px; height: 22px; background: var(--panel-border); }
+  #ask { top: 16px; left: 50%; transform: translateX(-50%); width: min(560px, calc(100vw - 700px)); padding: 12px 16px;
+    font-size: 17px; display: none; }
+  #ask .caret { color: var(--accent); margin-right: 8px; }
+  #toast { top: 84px; left: 50%; transform: translateX(-50%); padding: 10px 16px; font-size: 14px; display: none;
+    max-width: min(560px, calc(100vw - 700px)); text-align: center; }
+  #toast b { color: var(--text-primary); }
+  #toast small { display: block; color: var(--text-muted); font-size: 12px; }
+  #clock { left: 50%; bottom: 84px; transform: translateX(-50%); padding: 10px 22px; text-align: center; display: none; }
+  #clock b { display: block; font-size: 34px; font-variant-numeric: tabular-nums; letter-spacing: 0.5px; }
+  #clock small { color: var(--text-secondary); font-size: 13px; font-variant-numeric: tabular-nums; }
+  #tip { position: fixed; pointer-events: none; padding: 8px 10px; border-radius: 10px; background: #11121d;
+    border: 1px solid var(--panel-border); font-size: 12px; max-width: 280px; display: none; z-index: 10; }
+  #tip .n { font-weight: 600; font-size: 13px; }
+  #tip .t { color: var(--text-muted); }
+  #labels { position: fixed; inset: 0; pointer-events: none; }
+  .label { position: absolute; transform: translate(-50%, -140%); font-size: 11px; color: var(--text-secondary);
+    white-space: nowrap; text-shadow: 0 0 6px #000, 0 0 2px #000; }
+  .label.me { color: var(--text-primary); font-weight: 600; font-size: 13px; }
+  #loading { position: fixed; inset: 0; display: grid; place-items: center; color: var(--text-secondary); }
+  @media (max-width: 1100px) {
+    #ask, #toast { width: auto; max-width: none; left: 332px; right: 352px; transform: none; }
+  }
+  @media (max-width: 760px) {
+    #hud { left: 16px; right: 16px; width: auto; }
+    #stories { display: none; }
+    #card { left: 16px; right: 16px; width: auto; }
+    #ask, #toast { left: 16px; right: 16px; top: auto; bottom: 140px; }
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+    "three": "./vendor/three/build/three.module.js",
+    "three/addons/": "./vendor/three/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="stage"></div>
+<div id="labels"></div>
+<div id="loading">Loading graph from FalkorDB export…</div>
+
+<div id="hud" class="panel">
+  <h1 id="title">Personal Brain</h1>
+  <div class="sub">My LinkedIn network, stored in FalkorDB</div>
+  <div class="stats">
+    <div class="stat"><b id="nNodes">–</b><small>nodes</small></div>
+    <div class="stat"><b id="nEdges">–</b><small>edges</small></div>
+    <div class="stat"><b id="nPeople">–</b><small>people</small></div>
+  </div>
+  <div id="search">
+    <input id="q" class="field" type="search" placeholder="Search people, companies, skills…" autocomplete="off">
+    <div id="results"></div>
+  </div>
+  <form id="remember">
+    <input id="rememberText" class="field" placeholder="Remember: Met Maya from Supabase at AI Summit, runs events"
+           autocomplete="off" aria-label="Remember someone you met">
+    <button type="button" id="forget" title="Delete everything added with Remember">↺</button>
+  </form>
+  <div id="rememberHint">Writes to FalkorDB live</div>
+  <div id="layers"></div>
+</div>
+
+<div id="stories" class="panel">
+  <h2>Ask the graph</h2>
+  <div id="storyList"></div>
+  <div id="cypher"><pre id="cypherText"></pre><div class="meta" id="cypherMeta"></div></div>
+</div>
+
+<div id="ask" class="panel"><span class="caret">›</span><span id="askText"></span></div>
+<div id="toast" class="panel"></div>
+<div id="clock" class="panel"><b id="clockDate"></b><small id="clockCount"></small></div>
+<div id="card" class="panel"></div>
+
+<div id="controls" class="panel">
+  <button id="b2d">2D</button>
+  <button id="b3d" class="on">3D</button>
+  <span class="sep"></span>
+  <button id="bRotate" class="on">Auto-rotate</button>
+  <button id="bReset">Reset</button>
+  <button id="bIntro">Big bang</button>
+  <button id="bTime">Time-lapse</button>
+  <span class="sep"></span>
+  <button id="bDemo">▶ Demo</button>
+  <button id="bLists" title="Ranked co-hosts, podcast guests and places to speak">Shortlists ↗</button>
+</div>
+<div id="tip"></div>
+
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+
+const css = getComputedStyle(document.documentElement);
+const cssVar = (name) => css.getPropertyValue(name).trim();
+// Legend order = fixed categorical slot order.
+const TYPES = [
+  { label: "Person",   name: "People",    color: cssVar("--series-1"), size: 2.8 },
+  { label: "Company",  name: "Companies", color: cssVar("--series-2"), size: 1.9 },
+  { label: "School",   name: "Schools",   color: cssVar("--series-3"), size: 2.0 },
+  { label: "Event",    name: "Events",    color: cssVar("--series-4"), size: 4.0 },
+  { label: "Topic",    name: "Topics",    color: cssVar("--series-5"), size: 9 },
+  { label: "Investor", name: "Investors", color: cssVar("--series-6"), size: 2.6 },
+  { label: "Skill",    name: "Skills",    color: cssVar("--series-7"), size: 1.5 },
+  { label: "City",     name: "Cities",    color: cssVar("--series-8"), size: 3.4 },
+  { label: "Me",       name: "Me",        color: cssVar("--me"),       size: 22 },
+];
+const T_IDX = Object.fromEntries(TYPES.map((t, i) => [t.label, i]));
+const EDGE_STYLE = {   // base alpha and color source per relationship
+  CONNECTED: { a: 0.004, c: "Me" },      KNOWS: { a: 0.035, c: "Person" },
+  WORKED_AT: { a: 0.022, c: "Company" }, HAS_SKILL: { a: 0.007, c: "Skill" },
+  STUDIED_AT: { a: 0.03, c: "School" },  MET_AT: { a: 0.07, c: "Event" },
+  ATTENDED: { a: 0.2, c: "Event" },      INTO: { a: 0.03, c: "Topic" },
+  HAS_EXPERIENCE: { a: 0.03, c: "Skill" }, FUNDED_BY: { a: 0.08, c: "Investor" },
+  MET: { a: 0.35, c: "Me" },               LIVES_IN: { a: 0.025, c: "City" },
+  HOSTED_BY: { a: 0.12, c: "Event" },     ABOUT: { a: 0.04, c: "Topic" },
+  HELD_IN: { a: 0.02, c: "City" },
+};
+// 3D = "layers": each node keeps its 2D spot and moves to its type's layer.
+const LAYER_Z = { Topic: 620, Investor: 470, Company: 330, Event: 170, Person: 0, Me: 0, City: -170, School: -330,
+  Skill: -620 };
+
+const [graph, stories] = await Promise.all([
+  fetch("graph.json", { cache: "no-store" }).then((r) => r.json()),
+  fetch("stories.json", { cache: "no-store" }).then((r) => r.json()).catch(() => []),
+]);
+document.getElementById("loading").remove();
+
+// ---------- data (typed arrays with spare room for live "remember" additions) ----------
+const N0 = graph.nodes.length, E0 = graph.edges.length;
+const CAP_N = N0 + 500, CAP_E = E0 + 6000;
+let nN = N0, nE = E0;
+const exists = new Uint8Array(CAP_N), typeOf = new Uint8Array(CAP_N), degree = new Uint32Array(CAP_N);
+const names = new Array(CAP_N).fill(""), subs = new Array(CAP_N).fill(""), whens = new Array(CAP_N).fill("");
+const edgeTypes = [...graph.types];
+const edgeTypeIndex = (t) => { let i = edgeTypes.indexOf(t); if (i < 0) { edgeTypes.push(t); i = edgeTypes.length - 1; } return i; };
+const labelToType = graph.labels.map((l) => T_IDX[l] ?? 0);
+graph.nodes.forEach((n, i) => {
+  exists[i] = 1; typeOf[i] = labelToType[n[0]]; names[i] = n[1]; subs[i] = n[2]; degree[i] = n[3]; whens[i] = n[4] || "";
+});
+const meIndex = typeOf.findIndex((t, i) => exists[i] && TYPES[t].label === "Me");
+const firstName = (names[meIndex] || "").split(" ")[0];
+if (firstName) document.title = document.getElementById("title").textContent = `${firstName}'s Personal Brain`;
+
+const P2 = new Float32Array(CAP_N * 3), P3 = new Float32Array(CAP_N * 3);
+const jitterOf = (i) => (((i * 2654435761) >>> 0) % 1000) / 1000 - 0.5;  // stable pseudo-random
+function setLayout(i, x, y) {
+  P2[i * 3] = x; P2[i * 3 + 1] = y; P2[i * 3 + 2] = 0;
+  P3[i * 3] = x; P3[i * 3 + 1] = y; P3[i * 3 + 2] = LAYER_Z[TYPES[typeOf[i]].label] + jitterOf(i) * 50;
+}
+for (let i = 0; i < N0; i++) setLayout(i, graph.pos2[i * 2], graph.pos2[i * 2 + 1]);
+
+const ES = new Uint32Array(CAP_E), ET = new Uint32Array(CAP_E), EK = new Uint8Array(CAP_E);
+graph.edges.forEach((e, i) => { ES[i] = e[0]; ET[i] = e[1]; EK[i] = e[2]; });
+const edgeKeys = new Set(graph.edges.map((e) => `${e[0]},${e[1]},${e[2]}`));
+
+// Adjacency: CSR for the export, plus a small map for live additions.
+const adjStart = new Uint32Array(N0 + 1);
+for (let i = 0; i < E0; i++) { adjStart[ES[i] + 1]++; adjStart[ET[i] + 1]++; }
+for (let i = 0; i < N0; i++) adjStart[i + 1] += adjStart[i];
+const adjEdges = new Uint32Array(E0 * 2), fill = adjStart.slice(0, N0);
+for (let i = 0; i < E0; i++) { adjEdges[fill[ES[i]]++] = i; adjEdges[fill[ET[i]]++] = i; }
+const extraAdj = new Map();
+function edgesOf(i) {
+  const base = i < N0 ? Array.from(adjEdges.subarray(adjStart[i], adjStart[i + 1])) : [];
+  return extraAdj.has(i) ? base.concat(extraAdj.get(i)) : base;
+}
+const other = (e, i) => (ES[e] === i ? ET[e] : ES[e]);
+
+// When each node "appears" (for the time-lapse): people by connection date, events by date,
+// everything else by its earliest connected person.
+const DAY = 86400000;
+const birth = new Float64Array(CAP_N).fill(Infinity);
+const dayOf = (s) => (s ? Date.parse(s) / DAY : NaN);
+function computeBirths() {
+  for (let i = 0; i < nN; i++) {
+    if (!exists[i]) continue;
+    const label = TYPES[typeOf[i]].label;
+    const d = dayOf(whens[i]);
+    birth[i] = label === "Me" ? -Infinity : (label === "Person" || label === "Event") && !isNaN(d) ? d : Infinity;
+  }
+  for (let i = 0; i < nN; i++) {
+    if (!exists[i] || birth[i] !== Infinity) continue;
+    let best = Infinity;
+    for (const e of edgesOf(i)) { const j = other(e, i); if (birth[j] !== -Infinity && birth[j] < best) best = birth[j]; }
+    birth[i] = best;
+  }
+}
+
+// ---------- three.js scene ----------
+const stage = document.getElementById("stage");
+// ?shot keeps the last frame so screenshots of a background tab are not black.
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance",
+  preserveDrawingBuffer: new URLSearchParams(location.search).has("shot") });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+const BG = new THREE.Color(cssVar("--surface-0"));
+// The composer clears its linear buffer with sRGB numbers, then OutputPass converts again.
+// Pre-darken the clear color once so the final pixel is exactly --surface-0.
+renderer.setClearColor(new THREE.Color().setRGB(BG.r, BG.g, BG.b, THREE.SRGBColorSpace), 1);
+stage.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(BG, 2000, 6000);
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 1, 60000);
+const VIEW_DIR = { 2: new THREE.Vector3(0, 0, 1), 3: new THREE.Vector3(0, -0.82, 0.57).normalize() };
+const HOME_DIST = 2800;
+const homeFor = (three) => VIEW_DIR[three ? 3 : 2].clone().multiplyScalar(HOME_DIST);
+camera.position.copy(homeFor(true));
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+controls.autoRotate = true; controls.autoRotateSpeed = 0.35;
+controls.screenSpacePanning = true; controls.minDistance = 30; controls.maxDistance = 14000;
+
+const cur = new Float32Array(CAP_N * 3);
+const typeColor = TYPES.map((t) => new THREE.Color(t.color));
+const nodeColor = new Float32Array(CAP_N * 4), nodeSize = new Float32Array(CAP_N), baseSize = new Float32Array(CAP_N);
+function styleNode(i) {
+  const c = typeColor[typeOf[i]], t = TYPES[typeOf[i]];
+  nodeColor[i * 4] = c.r; nodeColor[i * 4 + 1] = c.g; nodeColor[i * 4 + 2] = c.b;
+  baseSize[i] = t.label === "Me" ? t.size : Math.min(t.size * (1 + Math.log2(1 + degree[i]) * 0.3), 22);
+}
+for (let i = 0; i < N0; i++) styleNode(i);
+
+const fogUniforms = { uFogNear: { value: 2000 }, uFogFar: { value: 6000 } };
+const pointGeo = new THREE.BufferGeometry();
+pointGeo.setAttribute("position", new THREE.BufferAttribute(cur, 3));
+pointGeo.setAttribute("aColor", new THREE.BufferAttribute(nodeColor, 4));
+pointGeo.setAttribute("aSize", new THREE.BufferAttribute(nodeSize, 1));
+pointGeo.setDrawRange(0, nN);
+const pointMat = new THREE.ShaderMaterial({
+  uniforms: { uScale: { value: 2700 * renderer.getPixelRatio() }, ...fogUniforms },
+  vertexShader: `
+    attribute vec4 aColor; attribute float aSize;
+    uniform float uScale, uFogNear, uFogFar;
+    varying vec4 vColor;
+    void main() {
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      float fog = smoothstep(uFogNear, uFogFar, -mv.z);
+      vColor = vec4(aColor.rgb, aColor.a * (1.0 - 0.8 * fog));
+      gl_PointSize = min(aSize * uScale / max(-mv.z, 1.0), 64.0);
+      gl_Position = projectionMatrix * mv;
+    }`,
+  fragmentShader: `
+    varying vec4 vColor;
+    void main() {
+      float d = length(gl_PointCoord - 0.5);
+      if (d > 0.5) discard;
+      float core = smoothstep(0.5, 0.0, d);
+      gl_FragColor = vec4(vColor.rgb * (0.35 + 0.6 * core * core), vColor.a * core);
+    }`,
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+});
+const points = new THREE.Points(pointGeo, pointMat);
+points.frustumCulled = false;
+
+const linePos = new Float32Array(CAP_E * 6), lineColor = new Float32Array(CAP_E * 8);
+function styleEdge(e) {
+  const c = typeColor[T_IDX[EDGE_STYLE[edgeTypes[EK[e]]]?.c ?? "Person"]];
+  lineColor.set([c.r, c.g, c.b, 0, c.r, c.g, c.b, 0], e * 8);
+}
+for (let e = 0; e < E0; e++) styleEdge(e);
+const lineGeo = new THREE.BufferGeometry();
+lineGeo.setAttribute("position", new THREE.BufferAttribute(linePos, 3));
+lineGeo.setAttribute("color", new THREE.BufferAttribute(lineColor, 4));
+lineGeo.setDrawRange(0, nE * 2);
+const lines = new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({
+  vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: true }));
+lines.frustumCulled = false;
+
+// Starfield: far, faint, never picked or dimmed.
+const STARS = 5000, starPos = new Float32Array(STARS * 3), starSize = new Float32Array(STARS);
+for (let i = 0; i < STARS; i++) {
+  const u = Math.random() * 2 - 1, th = Math.random() * Math.PI * 2, r = 7000 + Math.random() * 9000;
+  const s = Math.sqrt(1 - u * u);
+  starPos.set([r * s * Math.cos(th), r * s * Math.sin(th), r * u], i * 3);
+  starSize[i] = 0.6 + Math.random() * Math.random() * 2.2;
+}
+const starGeo = new THREE.BufferGeometry();
+starGeo.setAttribute("position", new THREE.BufferAttribute(starPos, 3));
+starGeo.setAttribute("aSize", new THREE.BufferAttribute(starSize, 1));
+const stars = new THREE.Points(starGeo, new THREE.ShaderMaterial({
+  uniforms: { uPR: { value: renderer.getPixelRatio() } },
+  vertexShader: `attribute float aSize; uniform float uPR; varying float vA;
+    void main() { vA = 0.25 + 0.35 * aSize / 2.8; gl_PointSize = aSize * uPR;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `varying float vA;
+    void main() { float d = length(gl_PointCoord - 0.5); if (d > 0.5) discard;
+      gl_FragColor = vec4(vec3(0.75, 0.8, 1.0), vA * smoothstep(0.5, 0.1, d)); }`,
+  transparent: true, depthWrite: false,
+}));
+stars.frustumCulled = false;
+
+// Light pulses that travel along story paths.
+const MAXP = 1600, pulsePos = new Float32Array(MAXP * 3), pulseColor = new Float32Array(MAXP * 3);
+const pulseGeo = new THREE.BufferGeometry();
+pulseGeo.setAttribute("position", new THREE.BufferAttribute(pulsePos, 3));
+pulseGeo.setAttribute("color", new THREE.BufferAttribute(pulseColor, 3));
+pulseGeo.setDrawRange(0, 0);
+const dotTex = (() => {
+  const c = document.createElement("canvas"); c.width = c.height = 64;
+  const g = c.getContext("2d"), grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grd.addColorStop(0, "rgba(255,255,255,1)"); grd.addColorStop(0.35, "rgba(255,255,255,0.6)"); grd.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+})();
+const pulsePts = new THREE.Points(pulseGeo, new THREE.PointsMaterial({
+  size: 7, sizeAttenuation: false, map: dotTex, transparent: true, depthWrite: false, vertexColors: true,
+  blending: THREE.AdditiveBlending, color: new THREE.Color("#ffffff"), fog: false }));
+pulsePts.frustumCulled = false;
+let pulses = [];
+
+scene.add(stars, lines, points, pulsePts);
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const BLOOM = 0.55;
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), BLOOM, 0.35, 0.25);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+// ---------- state ----------
+const layerOn = TYPES.map(() => true);
+let mix = 1, mixTarget = 1;            // 0 = 2D layout, 1 = 3D layers
+let intro = 0, introStart = performance.now();
+let highlight = null;                   // { set, mode: "story" | "focus", focus, pairs }
+let timelapse = null;                   // { start, from, to, events, nextEvent }
+let positionsDirty = true;
+const spawning = new Map();             // node index -> spawn time (live additions glow in)
+
+const easeOut = (t) => 1 - Math.pow(1 - t, 4);
+const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function updatePositions() {
+  const s = 0.02 + 0.98 * easeOut(intro), m = easeInOut(mix);
+  for (let i = 0; i < nN * 3; i++) cur[i] = (P2[i] + (P3[i] - P2[i]) * m) * s;
+  for (let e = 0; e < nE; e++) {
+    const a = ES[e] * 3, b = ET[e] * 3, o = e * 6;
+    linePos[o] = cur[a]; linePos[o + 1] = cur[a + 1]; linePos[o + 2] = cur[a + 2];
+    linePos[o + 3] = cur[b]; linePos[o + 4] = cur[b + 1]; linePos[o + 5] = cur[b + 2];
+  }
+  pointGeo.attributes.position.needsUpdate = true;
+  lineGeo.attributes.position.needsUpdate = true;
+}
+
+const shown = new Uint8Array(CAP_N);
+function applyStyle() {
+  const set = highlight?.set, T = timelapse?.T;
+  for (let i = 0; i < nN; i++) {
+    const on = exists[i] && layerOn[typeOf[i]] && (T === undefined || birth[i] <= T);
+    shown[i] = on ? 1 : 0;
+    const inSet = !set || set[i];
+    let size = baseSize[i] * (set && set[i] ? 1.3 : 1);
+    if (T !== undefined && on && birth[i] > -Infinity) size *= 1 + 2.4 * Math.exp(-(T - birth[i]) / timelapse.flashDays);
+    nodeColor[i * 4 + 3] = !on ? 0 : !set ? 0.8 : inSet ? 1 : 0.04;
+    nodeSize[i] = on ? size : 0;
+  }
+  for (let e = 0; e < nE; e++) {
+    const a = ES[e], b = ET[e];
+    let alpha = shown[a] && shown[b] ? EDGE_STYLE[edgeTypes[EK[e]]]?.a ?? 0.05 : 0;
+    if (alpha && highlight) {
+      const lit = highlight.mode === "focus" ? (a === highlight.focus || b === highlight.focus)
+        : highlight.pairs ? highlight.pairs.has(a < b ? `${a},${b}` : `${b},${a}`) : (set[a] && set[b]);
+      alpha = lit ? 0.4 : 0.004;
+    }
+    lineColor[e * 8 + 3] = alpha; lineColor[e * 8 + 7] = alpha;
+  }
+  pointGeo.attributes.aColor.needsUpdate = true;
+  pointGeo.attributes.aSize.needsUpdate = true;
+  lineGeo.attributes.color.needsUpdate = true;
+  if (!timelapse) refreshLabels();
+}
+
+// ---------- camera moves ----------
+let fly = null;
+function flyTo(target, distance, duration = 1300, dirOverride = null) {
+  const dir = dirOverride ? dirOverride.clone() : camera.position.clone().sub(controls.target).normalize();
+  if (mixTarget === 0) dir.set(0, 0, 1);
+  fly = { t0: performance.now(), duration,
+    fromPos: camera.position.clone(), fromTarget: controls.target.clone(),
+    toTarget: target.clone(), toPos: target.clone().add(dir.multiplyScalar(distance)) };
+}
+const targetPos = (i) => {
+  const P = mixTarget ? P3 : P2;
+  return new THREE.Vector3(P[i * 3], P[i * 3 + 1], P[i * 3 + 2]);
+};
+function fitNodes(indices) {
+  const box = new THREE.Box3();
+  indices.forEach((i) => box.expandByPoint(targetPos(i)));
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  flyTo(sphere.center, Math.max(sphere.radius * 2.6, 260));
+}
+
+// ---------- labels ----------
+const labelsEl = document.getElementById("labels");
+let labelNodes = [];
+function hubIndices() {
+  const pick = (label, k) => [...Array(nN).keys()]
+    .filter((i) => exists[i] && TYPES[typeOf[i]].label === label).sort((a, b) => degree[b] - degree[a]).slice(0, k);
+  return [meIndex, ...pick("Topic", 11), ...pick("Company", 8), ...pick("Skill", 6), ...pick("Event", 2), ...pick("Investor", 3),
+    ...pick("City", 4)];
+}
+function setLabels(list) {
+  labelsEl.innerHTML = "";
+  labelNodes = list.map((i) => {
+    const el = document.createElement("div");
+    el.className = "label" + (i === meIndex ? " me" : "");
+    el.textContent = names[i];
+    labelsEl.appendChild(el);
+    return { i, el };
+  });
+}
+function refreshLabels() {
+  if (highlight) {
+    const ids = [];
+    for (let i = 0; i < nN; i++) if (highlight.set[i] && shown[i]) ids.push(i);
+    // Name the places first (companies, events), then investors, then people.
+    const rank = (i) => (typeOf[i] === T_IDX.Person ? 2 : typeOf[i] === T_IDX.Investor ? 1 : 0);
+    ids.sort((a, b) => (b === highlight.focus) - (a === highlight.focus) || rank(a) - rank(b)
+      || degree[b] - degree[a]);
+    setLabels(ids.slice(0, 14));
+  } else {
+    setLabels(hubIndices().filter((i) => layerOn[typeOf[i]]));
+  }
+}
+const tmp = new THREE.Vector3();
+function placeLabels() {
+  const placed = [];
+  for (const { i, el } of labelNodes) {
+    tmp.set(cur[i * 3], cur[i * 3 + 1], cur[i * 3 + 2]).project(camera);
+    const x = (tmp.x + 1) / 2 * innerWidth, y = (1 - tmp.y) / 2 * innerHeight;
+    const w = el.textContent.length * 6.6 + 8, h = 16;
+    const box = [x - w / 2, y - h * 1.6, x + w / 2, y - h * 0.4];
+    let visible = shown[i] && tmp.z < 1 && Math.abs(tmp.x) < 1.05 && Math.abs(tmp.y) < 1.05 && intro > 0.9;
+    if (visible) visible = !placed.some((b) => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1]);
+    el.style.display = visible ? "block" : "none";
+    if (visible) { placed.push(box); el.style.left = `${x}px`; el.style.top = `${y}px`; }
+  }
+}
+
+// ---------- hover + click ----------
+const raycaster = new THREE.Raycaster(), mouse = new THREE.Vector2();
+const tip = document.getElementById("tip");
+let pointer = null, downAt = null;
+function pick(clientX, clientY) {
+  mouse.set(clientX / innerWidth * 2 - 1, -(clientY / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(mouse, camera);
+  raycaster.params.Points.threshold = camera.position.distanceTo(controls.target) * 0.006;
+  let best = -1, bestD = Infinity;
+  for (const hit of raycaster.intersectObject(points)) {
+    const i = hit.index;
+    if (nodeColor[i * 4 + 3] < 0.3 || !nodeSize[i]) continue;
+    const d = hit.distanceToRay / Math.max(baseSize[i], 3);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+function showTip(i, x, y) {
+  if (i < 0) { tip.style.display = "none"; renderer.domElement.style.cursor = "default"; return; }
+  tip.innerHTML = `<div class="n"></div><div class="t"></div><div class="s"></div>`;
+  tip.querySelector(".n").textContent = names[i];
+  tip.querySelector(".t").textContent = `${TYPES[typeOf[i]].label} · ${degree[i].toLocaleString()} links`;
+  tip.querySelector(".s").textContent = subs[i] || "";
+  tip.style.display = "block";
+  tip.style.left = `${Math.min(x + 14, innerWidth - 290)}px`; tip.style.top = `${y + 14}px`;
+  renderer.domElement.style.cursor = "pointer";
+}
+renderer.domElement.addEventListener("pointermove", (ev) => { pointer = ev; });
+renderer.domElement.addEventListener("pointerdown", (ev) => { downAt = [ev.clientX, ev.clientY]; stopDemo(); });
+renderer.domElement.addEventListener("pointerup", (ev) => {
+  if (!downAt || Math.hypot(ev.clientX - downAt[0], ev.clientY - downAt[1]) > 5) return;
+  const i = pick(ev.clientX, ev.clientY);
+  i >= 0 ? focusNode(i) : clearHighlight();
+});
+
+// ---------- focus card ----------
+const card = document.getElementById("card");
+const h = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
+function focusNode(i) {
+  stopTimelapse();
+  const set = new Uint8Array(CAP_N); set[i] = 1;
+  const byType = TYPES.map(() => []);
+  for (const e of edgesOf(i)) { const j = other(e, i); if (!set[j]) { set[j] = 1; byType[typeOf[j]].push(j); } }
+  highlight = { set, mode: "focus", focus: i };
+  setActiveStory(null); setPulses([]); hideAsk();
+  applyStyle();
+  const t = TYPES[typeOf[i]];
+  card.innerHTML = "";
+  card.append(h("div", "name", names[i]));
+  const type = h("div", "type"); const dot = h("span", "dot"); dot.style.background = t.color;
+  type.append(dot, `${t.label} · ${degree[i].toLocaleString()} links`); card.append(type);
+  if (subs[i]) card.append(h("div", "headline", subs[i]));
+  byType.forEach((list, ti) => {
+    if (!list.length) return;
+    list.sort((a, b) => degree[b] - degree[a]);
+    const g = h("div", "group"); g.append(h("h3", null, `${TYPES[ti].name} (${list.length})`));
+    list.slice(0, 12).forEach((j) => { const b = h("button", null, names[j]); b.onclick = () => focusNode(j); g.append(b); });
+    card.append(g);
+  });
+  card.style.display = "block";
+  controls.autoRotate = false; setToggle("bRotate", false);
+  flyTo(targetPos(i), typeOf[i] === T_IDX.Me ? 1800 : 420);
+}
+function clearHighlight() {
+  setPulses([]); hideAsk();
+  if (!highlight) return;
+  highlight = null; card.style.display = "none"; setActiveStory(null); applyStyle();
+}
+
+// ---------- pulses ----------
+function setPulses(pairs) {
+  pulses = [];
+  if (pairs.length) {
+    const per = Math.max(1, Math.floor(MAXP / pairs.length));
+    for (const [a, b] of pairs) for (let k = 0; k < Math.min(per, 2); k++)
+      pulses.push({ a, b, phase: Math.random(), speed: 0.45 + Math.random() * 0.35 });
+    pulses = pulses.slice(0, MAXP);
+    // Each pulse takes the color of the node it travels to, a bit lighter.
+    pulses.forEach((p, k) => {
+      const c = typeColor[typeOf[p.b]];
+      pulseColor.set([0.35 + 0.65 * c.r, 0.35 + 0.65 * c.g, 0.35 + 0.65 * c.b], k * 3);
+    });
+    pulseGeo.attributes.color.needsUpdate = true;
+  }
+  pulseGeo.setDrawRange(0, pulses.length);
+}
+function updatePulses(now) {
+  if (!pulses.length) return;
+  const t0 = now / 1000;
+  pulses.forEach((p, k) => {
+    const t = (t0 * p.speed + p.phase) % 1, a = p.a * 3, b = p.b * 3;
+    pulsePos[k * 3] = cur[a] + (cur[b] - cur[a]) * t;
+    pulsePos[k * 3 + 1] = cur[a + 1] + (cur[b + 1] - cur[a + 1]) * t;
+    pulsePos[k * 3 + 2] = cur[a + 2] + (cur[b + 2] - cur[a + 2]) * t;
+  });
+  pulseGeo.attributes.position.needsUpdate = true;
+}
+
+// ---------- stories (typed question -> typed Cypher -> lit answer) ----------
+const storyList = document.getElementById("storyList");
+const cypherBox = document.getElementById("cypher"), cypherText = document.getElementById("cypherText");
+const cypherMeta = document.getElementById("cypherMeta");
+const askBox = document.getElementById("ask"), askText = document.getElementById("askText");
+let storyToken = 0;
+stories.forEach((s) => {
+  const b = h("button", "story"); b.dataset.id = s.id;
+  b.append(h("span", null, s.title), h("small", null, `${s.nodes.length} nodes · ${s.ms} ms on ${s.source}`));
+  b.onclick = () => { stopDemo(); runStory(s); };
+  storyList.append(b);
+});
+function setActiveStory(id) {
+  storyList.querySelectorAll(".story").forEach((b) => b.classList.toggle("active", b.dataset.id === id));
+  cypherBox.style.display = id ? "block" : "none";
+}
+function hideAsk() { askBox.style.display = "none"; storyToken++; }
+async function typeInto(el, text, cps, token) {
+  const start = performance.now();
+  while (true) {
+    if (token !== storyToken) return false;
+    const n = Math.min(text.length, Math.floor((performance.now() - start) * cps / 1000));
+    el.textContent = text.slice(0, n);
+    if (n >= text.length) return true;
+    await sleep(16);
+  }
+}
+async function runStory(s) {
+  stopTimelapse();
+  const token = ++storyToken;
+  highlight = null; card.style.display = "none"; setPulses([]); applyStyle();
+  setActiveStory(s.id);
+  askBox.style.display = "block"; cypherText.textContent = ""; cypherMeta.textContent = "";
+  if (!await typeInto(askText, s.title, 38, token)) return;
+  if (!await typeInto(cypherText, s.cypher, 160, token)) return;
+  const set = new Uint8Array(CAP_N);
+  s.nodes.forEach((i) => { set[i] = 1; });
+  const pairs = s.pairs || [];
+  highlight = { set, mode: "story", focus: s.focus,
+    pairs: pairs.length ? new Set(pairs.map(([a, b]) => (a < b ? `${a},${b}` : `${b},${a}`))) : null };
+  applyStyle(); setPulses(pairs);
+  cypherMeta.textContent = "";
+  cypherMeta.append("FalkorDB answered in ", h("b", null, `${s.ms} ms`), ` · ${s.rows} rows · ${s.nodes.length} nodes lit`);
+  controls.autoRotate = false; setToggle("bRotate", false);
+  fitNodes(s.nodes);
+}
+
+// ---------- time-lapse ----------
+const clock = document.getElementById("clock"), clockDate = document.getElementById("clockDate");
+const clockCount = document.getElementById("clockCount"), toast = document.getElementById("toast");
+const TL_SECONDS = 22;
+let toastTimer = null;
+function showToast(html, ms = 2200) {
+  toast.innerHTML = html; toast.style.display = "block";
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.style.display = "none"; }, ms);
+}
+function startTimelapse() {
+  clearHighlight(); computeBirths();
+  let from = Infinity, to = -Infinity;
+  for (let i = 0; i < nN; i++) if (exists[i] && TYPES[typeOf[i]].label === "Person" && isFinite(birth[i])) {
+    from = Math.min(from, birth[i]); to = Math.max(to, birth[i]);
+  }
+  const events = [];
+  for (let i = 0; i < nN; i++) if (exists[i] && TYPES[typeOf[i]].label === "Event" && isFinite(birth[i]) && degree[i] >= 10) events.push(i);
+  events.sort((a, b) => birth[a] - birth[b]);
+  timelapse = { start: performance.now(), from: from - 20, to: to + 3, T: from - 20, events, nextEvent: 0,
+    flashDays: ((to - from) / TL_SECONDS) * 0.7 };
+  clock.style.display = "block"; setToggle("bTime", true); setLabels([meIndex]);
+}
+function stopTimelapse() {
+  if (!timelapse) return;
+  timelapse = null; clock.style.display = "none"; setToggle("bTime", false); applyStyle();
+}
+function stepTimelapse(now) {
+  const tl = timelapse, k = Math.min((now - tl.start) / (TL_SECONDS * 1000), 1);
+  tl.T = tl.from + (tl.to - tl.from) * k;
+  applyStyle();
+  let people = 0;
+  for (let i = 0; i < nN; i++) if (shown[i] && typeOf[i] === T_IDX.Person) people++;
+  clockDate.textContent = new Date(tl.T * DAY).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+  clockCount.textContent = `${people.toLocaleString()} people in my network`;
+  while (tl.nextEvent < tl.events.length && birth[tl.events[tl.nextEvent]] <= tl.T) {
+    const e = tl.events[tl.nextEvent++];
+    showToast(`<b></b><small></small>`, 1800);
+    toast.querySelector("b").textContent = names[e];
+    toast.querySelector("small").textContent = `+${degree[e] - 1} people met`;
+  }
+  if (k >= 1) { setTimeout(stopTimelapse, 1500); timelapse.done = true; }
+}
+
+// ---------- live "remember" (writes to FalkorDB through the local server) ----------
+const rememberForm = document.getElementById("remember"), rememberText = document.getElementById("rememberText");
+const rememberHint = document.getElementById("rememberHint");
+function addGraphData(data) {
+  const fresh = [];
+  for (const n of data.nodes) {
+    const i = n.id;
+    if (i >= CAP_N || exists[i]) continue;
+    exists[i] = 1; typeOf[i] = T_IDX[n.label] ?? 0; names[i] = n.name; subs[i] = n.sub; whens[i] = n.when;
+    nN = Math.max(nN, i + 1); fresh.push(i);
+  }
+  for (const e of data.edges) {
+    const t = edgeTypeIndex(e.type), key = `${e.s},${e.t},${t}`;
+    if (edgeKeys.has(key) || nE >= CAP_E || !exists[e.s] || !exists[e.t]) continue;
+    edgeKeys.add(key);
+    ES[nE] = e.s; ET[nE] = e.t; EK[nE] = t; styleEdge(nE);
+    for (const v of [e.s, e.t]) { if (!extraAdj.has(v)) extraAdj.set(v, []); extraAdj.get(v).push(nE); degree[v]++; }
+    nE++;
+  }
+  // Place new nodes next to a neighbor that was already on the map (company, event, or me).
+  const placed = new Set();
+  const isPlaced = (j) => !fresh.includes(j) || placed.has(j);
+  for (let pass = 0; pass < 3; pass++) for (const i of fresh) {
+    if (placed.has(i)) continue;
+    const anchors = edgesOf(i).map((e) => other(e, i)).filter(isPlaced)
+      .sort((a, b) => (typeOf[b] === T_IDX.Company) - (typeOf[a] === T_IDX.Company) || (b === meIndex) - (a === meIndex));
+    if (!anchors.length && pass < 2) continue;
+    const a = anchors[0] ?? meIndex, ang = Math.random() * Math.PI * 2, r = 50 + Math.random() * 40;
+    setLayout(i, P2[a * 3] + Math.cos(ang) * r, P2[a * 3 + 1] + Math.sin(ang) * r);
+    placed.add(i);
+  }
+  for (let i = 0; i < nN; i++) if (exists[i]) styleNode(i);
+  pointGeo.setDrawRange(0, nN); lineGeo.setDrawRange(0, nE * 2);
+  positionsDirty = true;
+  const now = performance.now();
+  fresh.forEach((i) => spawning.set(i, now));
+  updateStats(); renderLayers();
+  return fresh;
+}
+rememberForm.addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const text = rememberText.value.trim();
+  if (!text) return;
+  stopDemo(); rememberHint.textContent = "Saving to FalkorDB…";
+  try {
+    const res = await fetch("/api/remember", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }) });
+    const data = await res.json();
+    if (!res.ok) { rememberHint.textContent = data.error || "Could not save"; return; }
+    rememberText.value = "";
+    addGraphData(data);
+    const p = data.parsed, coworkers = data.edges.filter((e) => e.type === "KNOWS").length;
+    rememberHint.textContent = `Saved in ${data.ms} ms on ${data.source || "FalkorDB"}`;
+    showToast(`<b></b><small></small>`, 3500);
+    toast.querySelector("b").textContent = `Remembered ${p.name}`;
+    toast.querySelector("small").textContent = [p.company, p.event, coworkers ? `linked to ${coworkers} coworkers` : "",
+      `${data.ms} ms`].filter(Boolean).join(" · ");
+    setTimeout(() => focusNode(data.person), 300);
+  } catch {
+    rememberHint.textContent = "Start the demo server: ./spike/serve_viewer.sh";
+  }
+});
+document.getElementById("forget").onclick = async () => {
+  try {
+    const res = await fetch("/api/forget", { method: "POST" });
+    const data = await res.json();
+    rememberHint.textContent = `Deleted ${data.deleted} remembered nodes. Reloading…`;
+    setTimeout(() => location.reload(), 700);
+  } catch { rememberHint.textContent = "Start the demo server: ./spike/serve_viewer.sh"; }
+};
+
+// ---------- search ----------
+const q = document.getElementById("q"), results = document.getElementById("results");
+let matches = [], active = 0;
+q.addEventListener("input", () => {
+  const s = q.value.trim().toLowerCase();
+  matches = [];
+  if (s.length >= 2) {
+    for (let i = 0; i < nN && matches.length < 200; i++) if (exists[i] && names[i].toLowerCase().includes(s)) matches.push(i);
+    matches.sort((a, b) => (names[b].toLowerCase().startsWith(s) - names[a].toLowerCase().startsWith(s)) || degree[b] - degree[a]);
+    matches = matches.slice(0, 8);
+  }
+  active = 0; renderResults();
+});
+q.addEventListener("keydown", (ev) => {
+  if (!matches.length) return;
+  if (ev.key === "ArrowDown") { active = (active + 1) % matches.length; renderResults(); ev.preventDefault(); }
+  if (ev.key === "ArrowUp") { active = (active - 1 + matches.length) % matches.length; renderResults(); ev.preventDefault(); }
+  if (ev.key === "Enter") choose(matches[active]);
+});
+function renderResults() {
+  results.innerHTML = "";
+  matches.forEach((i, k) => {
+    const b = h("button", k === active ? "active" : null);
+    const dot = h("span", "dot"); dot.style.background = TYPES[typeOf[i]].color;
+    b.append(dot, names[i], h("small", null, TYPES[typeOf[i]].label));
+    b.onclick = () => choose(i);
+    results.append(b);
+  });
+  results.style.display = matches.length ? "block" : "none";
+}
+function choose(i) {
+  q.value = ""; matches = []; renderResults(); q.blur(); stopDemo();
+  if (!layerOn[typeOf[i]]) { layerOn[typeOf[i]] = true; renderLayers(); }
+  focusNode(i);
+}
+
+// ---------- layers (legend) + stats ----------
+const layersEl = document.getElementById("layers");
+function renderLayers() {
+  const counts = TYPES.map(() => 0);
+  for (let i = 0; i < nN; i++) if (exists[i]) counts[typeOf[i]]++;
+  layersEl.innerHTML = "";
+  TYPES.forEach((t, ti) => {
+    if (t.label === "Me" || !counts[ti]) return;
+    const b = h("button", "chip" + (layerOn[ti] ? "" : " off"));
+    const dot = h("span", "dot"); dot.style.background = t.color;
+    b.append(dot, t.name, h("small", null, counts[ti].toLocaleString()));
+    b.title = `Show or hide ${t.name.toLowerCase()}`;
+    b.onclick = () => { layerOn[ti] = !layerOn[ti]; renderLayers(); applyStyle(); };
+    layersEl.append(b);
+  });
+}
+function updateStats() {
+  let nodes = 0, people = 0;
+  for (let i = 0; i < nN; i++) if (exists[i]) { nodes++; if (typeOf[i] === T_IDX.Person) people++; }
+  document.getElementById("nNodes").textContent = nodes.toLocaleString();
+  document.getElementById("nEdges").textContent = nE.toLocaleString();
+  document.getElementById("nPeople").textContent = people.toLocaleString();
+}
+
+// ---------- controls ----------
+function setToggle(id, on) { document.getElementById(id).classList.toggle("on", on); }
+function setMode(three) {
+  mixTarget = three ? 1 : 0;
+  setToggle("b3d", three); setToggle("b2d", !three);
+  controls.enableRotate = three;
+  controls.mouseButtons.LEFT = three ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
+  controls.autoRotate = three && document.getElementById("bRotate").classList.contains("on");
+  const d = camera.position.distanceTo(controls.target);
+  flyTo(new THREE.Vector3(controls.target.x, controls.target.y, 0), d, 1200, VIEW_DIR[three ? 3 : 2]);
+}
+function setRotate(on) { setToggle("bRotate", on); controls.autoRotate = on && mixTarget === 1; }
+function resetView() { clearHighlight(); flyTo(new THREE.Vector3(), HOME_DIST, 1300, VIEW_DIR[mixTarget ? 3 : 2]); }
+function bigBang() {
+  clearHighlight(); stopTimelapse(); intro = 0; introStart = performance.now(); positionsDirty = true;
+  fly = null; camera.position.copy(homeFor(mixTarget === 1)); controls.target.set(0, 0, 0);
+}
+document.getElementById("b2d").onclick = () => { stopDemo(); setMode(false); };
+document.getElementById("b3d").onclick = () => { stopDemo(); setMode(true); };
+document.getElementById("bRotate").onclick = (ev) => setRotate(!ev.currentTarget.classList.contains("on"));
+document.getElementById("bReset").onclick = () => { stopDemo(); resetView(); };
+document.getElementById("bIntro").onclick = () => { stopDemo(); bigBang(); };
+document.getElementById("bLists").onclick = () => window.open("shortlists.html", "_blank", "noopener");
+document.getElementById("bTime").onclick = () => { stopDemo(); timelapse ? stopTimelapse() : startTimelapse(); };
+document.getElementById("bDemo").onclick = () => (demoToken ? stopDemo() : runDemo());
+addEventListener("keydown", (ev) => {
+  if (ev.target === q || ev.target === rememberText) return;
+  const k = ev.key.toLowerCase();
+  if (k === "escape") { stopDemo(); stopTimelapse(); clearHighlight(); }
+  if (k === "2") setMode(false);
+  if (k === "3") setMode(true);
+  if (k === "t") document.getElementById("bTime").click();
+  if (k === "b") bigBang();
+  if (k === "d") document.getElementById("bDemo").click();
+});
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
+});
+
+// ---------- demo mode: the whole show, hands-free ----------
+let demoToken = 0;
+function stopDemo() { if (demoToken) { demoToken = 0; setToggle("bDemo", false); document.getElementById("bDemo").textContent = "▶ Demo"; } }
+async function runDemo() {
+  const token = demoToken = Date.now();
+  setToggle("bDemo", true); document.getElementById("bDemo").textContent = "■ Stop";
+  const alive = () => demoToken === token;
+  const wait = async (ms) => { const end = performance.now() + ms; while (performance.now() < end) { if (!alive()) return false; await sleep(50); } return alive(); };
+  if (mixTarget !== 1) setMode(true);
+  setRotate(true); bigBang();
+  if (!await wait(4200)) return;
+  startTimelapse();
+  if (!await wait(TL_SECONDS * 1000 + 1800)) return;
+  setRotate(true); resetView();
+  if (!await wait(5000)) return;
+  for (const s of stories) {
+    if (!alive()) return;
+    runStory(s);
+    if (!await wait(9000)) return;
+  }
+  clearHighlight(); setRotate(true); resetView();
+  if (!await wait(2500)) return;
+  stopDemo();
+}
+
+// Debug handle for the console (spike only).
+window.__brain = { renderer, composer, bloom, scene, camera, cur, nodeColor, nodeSize, linePos, lineColor, get nN() { return nN; }, get nE() { return nE; } };
+
+// ---------- startup ----------
+if (stories[0]?.source) rememberHint.textContent = `Writes to ${stories[0].source} live`;
+computeBirths(); updateStats(); renderLayers(); applyStyle();
+fetch(`/api/delta?since=${N0}`, { cache: "no-store" })
+  .then((r) => (r.ok ? r.json() : null)).then((d) => { if (d && d.nodes.length) { addGraphData(d); applyStyle(); } })
+  .catch(() => { rememberHint.textContent = "Remember needs the demo server (./spike/serve_viewer.sh)"; });
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(now - last, 250); last = now;
+  if (intro < 1) {
+    intro = Math.min((now - introStart) / 3200, 1);
+    bloom.strength = BLOOM + 1.2 * (1 - easeOut(intro));
+    positionsDirty = true;
+  }
+  if (mix !== mixTarget) {
+    const step = dt / 1200;
+    mix = mixTarget > mix ? Math.min(mix + step, 1) : Math.max(mix - step, 0);
+    positionsDirty = true;
+  }
+  if (positionsDirty) { updatePositions(); positionsDirty = false; }
+  if (timelapse && !timelapse.done) stepTimelapse(now);
+  if (spawning.size) {
+    for (const [i, t] of spawning) {
+      const k = (now - t) / 1800;
+      if (k >= 1) { spawning.delete(i); nodeSize[i] = shown[i] ? baseSize[i] * (highlight?.set?.[i] ? 1.3 : 1) : 0; continue; }
+      nodeSize[i] = baseSize[i] * (1 + 6 * (1 - k));
+    }
+    pointGeo.attributes.aSize.needsUpdate = true;
+  }
+  if (fly) {
+    const t = Math.min((now - fly.t0) / fly.duration, 1), k = easeInOut(t);
+    camera.position.lerpVectors(fly.fromPos, fly.toPos, k);
+    controls.target.lerpVectors(fly.fromTarget, fly.toTarget, k);
+    if (t >= 1) fly = null;
+  }
+  controls.update();
+  const dist = camera.position.distanceTo(controls.target);
+  scene.fog.near = fogUniforms.uFogNear.value = dist * 0.7;
+  scene.fog.far = fogUniforms.uFogFar.value = dist * 1.8;
+  updatePulses(now);
+  if (pointer && !fly) { showTip(pick(pointer.clientX, pointer.clientY), pointer.clientX, pointer.clientY); pointer = null; }
+  placeLabels();
+  composer.render();
+  next();
+}
+// Hidden tabs pause requestAnimationFrame; keep a slow loop so state stays current.
+const next = () => (document.hidden ? setTimeout(() => frame(performance.now()), 200) : requestAnimationFrame(frame));
+next();
+</script>
+</body>
+</html>

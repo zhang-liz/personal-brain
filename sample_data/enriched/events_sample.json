@@ -1,0 +1,160 @@
+{
+ "items": [
+  {
+   "eventId": "sample-0",
+   "name": "Agent Memory Meetup",
+   "description": "An evening about agent memory and AI agents.",
+   "startAt": "2027-01-10T01:30:00Z",
+   "timezone": "America/Los_Angeles",
+   "hosts": [
+    {
+     "name": "Amara Silva",
+     "bio": "Developer Relations Lead @ Meta",
+     "socialHandles": {
+      "linkedin": "https://www.linkedin.com/in/amara-silva-226"
+     }
+    }
+   ],
+   "location": {
+    "name": "Community space",
+    "city": "San Francisco"
+   },
+   "guestCount": 57,
+   "eventUrl": "",
+   "categoryNames": [
+    "AI",
+    "Tech"
+   ]
+  },
+  {
+   "eventId": "sample-1",
+   "name": "Knowledge Graph Night x Kestrel Graph",
+   "description": "An evening about knowledge graph and GraphRAG.",
+   "startAt": "2027-02-11T01:30:00Z",
+   "timezone": "America/Los_Angeles",
+   "hosts": [
+    {
+     "name": "Viktor Lindqvist",
+     "bio": "Developer Relations Lead @ NVIDIA",
+     "socialHandles": {
+      "linkedin": "https://www.linkedin.com/in/viktor-lindqvist-396"
+     }
+    }
+   ],
+   "location": {
+    "name": "Community space",
+    "city": "San Francisco"
+   },
+   "guestCount": 235,
+   "eventUrl": "",
+   "categoryNames": [
+    "AI",
+    "Tech"
+   ]
+  },
+  {
+   "eventId": "sample-2",
+   "name": "RAG Builders Breakfast",
+   "description": "An evening about RAG and semantic search.",
+   "startAt": "2027-03-12T01:30:00Z",
+   "timezone": "America/Los_Angeles",
+   "hosts": [
+    {
+     "name": "Valentina Mensah",
+     "bio": "Developer Relations Lead @ Google",
+     "socialHandles": {
+      "linkedin": "https://www.linkedin.com/in/valentina-mensah-653"
+     }
+    }
+   ],
+   "location": {
+    "name": "Community space",
+    "city": "San Francisco"
+   },
+   "guestCount": 187,
+   "eventUrl": "",
+   "categoryNames": [
+    "AI",
+    "Tech"
+   ]
+  },
+  {
+   "eventId": "sample-3",
+   "name": "AI Agents Hackathon",
+   "description": "An evening about AI agents.",
+   "startAt": "2027-04-13T01:30:00Z",
+   "timezone": "America/Los_Angeles",
+   "hosts": [
+    {
+     "name": "Kenji Silva",
+     "bio": "Head of Community & Events @ Google",
+     "socialHandles": {
+      "linkedin": "https://www.linkedin.com/in/kenji-silva-161"
+     }
+    }
+   ],
+   "location": {
+    "name": "Community space",
+    "city": "San Francisco"
+   },
+   "guestCount": 107,
+   "eventUrl": "",
+   "categoryNames": [
+    "AI",
+    "Tech"
+   ]
+  },
+  {
+   "eventId": "sample-4",
+   "name": "DevRel Coffee",
+   "description": "An evening about developer relations.",
+   "startAt": "2027-05-14T01:30:00Z",
+   "timezone": "America/Los_Angeles",
+   "hosts": [
+    {
+     "name": "Sanjay Holm",
+     "bio": "Developer Relations Lead @ Brightfjord",
+     "socialHandles": {
+      "linkedin": "https://www.linkedin.com/in/sanjay-holm-576"
+     }
+    }
+   ],
+   "location": {
+    "name": "Community space",
+    "city": "San Francisco"
+   },
+   "guestCount": 236,
+   "eventUrl": "",
+   "categoryNames": [
+    "AI",
+    "Tech"
+   ]
+  },
+  {
+   "eventId": "sample-5",
+   "name": "LLM Evals Workshop x Paperlantern AI",
+   "description": "An evening about LLMs and evals.",
+   "startAt": "2027-06-15T01:30:00Z",
+   "timezone": "America/Los_Angeles",
+   "hosts": [
+    {
+     "name": "Rosa Nakamura",
+     "bio": "Developer Relations Lead @ Gullwing Analytics",
+     "socialHandles": {
+      "linkedin": "https://www.linkedin.com/in/rosa-nakamura-470"
+     }
+    }
+   ],
+   "location": {
+    "name": "Community space",
+    "city": "San Francisco"
+   },
+   "guestCount": 180,
+   "eventUrl": "",
+   "categoryNames": [
+    "AI",
+    "Tech"
+   ]
+  }
+ ]
+}

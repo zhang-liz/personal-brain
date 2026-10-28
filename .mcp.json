@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "personal-brain": {
+      "command": ".venv/bin/python",
+      "args": ["spike/mcp_server.py"]
+    }
+  }
+}

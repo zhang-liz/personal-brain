@@ -1,0 +1,245 @@
+Notes:
+"Made-up sample data. Every person here is invented."
+
+First Name,Last Name,URL,Email Address,Company,Position,Connected On
+Oskar,Mensah,https://www.linkedin.com/in/oskar-mensah-504,,Bramblewood AI,Staff Engineer,28 Aug 2022
+Adaeze,Okafor,https://www.linkedin.com/in/adaeze-okafor-174,,Microsoft,Founder & CEO,19 Mar 2026
+Joon,Jansen,https://www.linkedin.com/in/joon-jansen-196,,Heronfield,Staff Engineer,01 Sep 2024
+Freya,Popescu,https://www.linkedin.com/in/freya-popescu-159,,Google,Research Scientist,20 Jul 2025
+Lior,Rossi,https://www.linkedin.com/in/lior-rossi-319,,Lanternfish Data,Staff Engineer,09 Jul 2026
+Tomás,Ferreira,https://www.linkedin.com/in/tomas-ferreira-544,,Quillmark,Partnerships Manager,08 Oct 2026
+Valentina,Tanaka,https://www.linkedin.com/in/valentina-tanaka-346,,Pebblestack,Partnerships Manager,12 Mar 2026
+Lucía,Mwangi,https://www.linkedin.com/in/lucia-mwangi-534,,Google,Research Scientist,28 Sep 2019
+Amara,Silva,https://www.linkedin.com/in/amara-silva-226,,Meta,Developer Relations Lead,20 Apr 2021
+Kwame,Bauer,https://www.linkedin.com/in/kwame-bauer-742,,Google,Partnerships Manager,01 Sep 2026
+Rosa,Okafor,https://www.linkedin.com/in/rosa-okafor-690,,Thimble AI,Principal at a VC firm,09 Jul 2026
+Rosa,Varga,https://www.linkedin.com/in/rosa-varga-150,,Larkspur Systems,Principal at a VC firm,12 Jun 2024
+Kwame,Ortega,https://www.linkedin.com/in/kwame-ortega-670,,Thimble AI,ML Engineer,06 Apr 2022
+Viktor,Lindqvist,https://www.linkedin.com/in/viktor-lindqvist-396,,NVIDIA,Developer Relations Lead,30 Apr 2020
+Valentina,Mensah,https://www.linkedin.com/in/valentina-mensah-653,,Google,Developer Relations Lead,10 Nov 2019
+Ifeoma,Silva,https://www.linkedin.com/in/ifeoma-silva-415,,Pebblestack,Partnerships Manager,13 May 2021
+Farah,Park,https://www.linkedin.com/in/farah-park-285,,Microsoft,ML Engineer,27 Jun 2020
+Mateo,Popescu,https://www.linkedin.com/in/mateo-popescu-684,,Salesforce,Research Scientist,01 Aug 2024
+Sven,Sato,https://www.linkedin.com/in/sven-sato-481,,Cobaltfern,Software Engineer,17 Sep 2026
+Mateo,Mwangi,https://www.linkedin.com/in/mateo-mwangi-829,,Microsoft,Product Manager,01 Sep 2023
+Kenji,Silva,https://www.linkedin.com/in/kenji-silva-161,,Google,Head of Community & Events,17 Oct 2022
+Greta,Achebe,https://www.linkedin.com/in/greta-achebe-608,,Salesforce,ML Engineer,05 Mar 2023
+Mariam,Jansen,https://www.linkedin.com/in/mariam-jansen-537,,Larkspur Systems,Product Manager,01 Feb 2022
+Sanjay,Holm,https://www.linkedin.com/in/sanjay-holm-576,,Brightfjord,Developer Relations Lead,13 Feb 2026
+Rosa,Nakamura,https://www.linkedin.com/in/rosa-nakamura-470,,Gullwing Analytics,Developer Relations Lead,16 Feb 2021
+Camille,Nair,https://www.linkedin.com/in/camille-nair-913,,Google,Product Manager,28 Jan 2026
+Hana,Horvat,https://www.linkedin.com/in/hana-horvat-898,,Google,Research Scientist,10 Aug 2023
+Mei,Ferreira,https://www.linkedin.com/in/mei-ferreira-688,,Cinderpath,Founder & CEO,03 Mar 2025
+Camille,Ali,https://www.linkedin.com/in/camille-ali-606,,Gullwing Analytics,Partnerships Manager,27 Apr 2026
+Idris,Petrov,https://www.linkedin.com/in/idris-petrov-846,,Lanternfish Data,Podcast host,04 Jun 2023
+Saoirse,Brennan,https://www.linkedin.com/in/saoirse-brennan-723,,Cobaltfern,Podcast host,08 Oct 2026
+Kenji,Haddad,https://www.linkedin.com/in/kenji-haddad-624,,Meta,Research Scientist,25 Sep 2022
+Valentina,Kaur,https://www.linkedin.com/in/valentina-kaur-875,,Saltmarsh Labs,Product Manager,21 May 2026
+Leilani,Mensah,https://www.linkedin.com/in/leilani-mensah-600,,Marigold Robotics,ML Engineer,22 May 2025
+Valentina,Ortega,https://www.linkedin.com/in/valentina-ortega-784,,Gullwing Analytics,Staff Engineer,10 May 2021
+Kenji,Mwangi,https://www.linkedin.com/in/kenji-mwangi-686,,Paperlantern AI,Head of Community & Events,15 Jan 2023
+Maren,Holm,https://www.linkedin.com/in/maren-holm-448,,Heronfield,Research Scientist,03 Jun 2021
+Teodor,Delgado,https://www.linkedin.com/in/teodor-delgado-708,,NVIDIA,Co-founder & CTO,01 Jan 2024
+Nikolai,Popescu,https://www.linkedin.com/in/nikolai-popescu-916,,Saltmarsh Labs,Software Engineer,22 Apr 2024
+Dmitri,Tanaka,https://www.linkedin.com/in/dmitri-tanaka-960,,Quietloop,Software Engineer,02 Dec 2024
+Lucía,Yilmaz,https://www.linkedin.com/in/lucia-yilmaz-585,,Meta,Partnerships Manager,08 Oct 2026
+Teodor,Morales,https://www.linkedin.com/in/teodor-morales-166,,Mossgate,Staff Engineer,06 Jan 2019
+Amara,Horvat,https://www.linkedin.com/in/amara-horvat-417,,Larkspur Systems,Co-founder & CTO,28 Mar 2026
+Adaeze,Silva,https://www.linkedin.com/in/adaeze-silva-797,,Salesforce,Founder & CEO,19 Feb 2026
+Joon,Kim,https://www.linkedin.com/in/joon-kim-391,,Quietloop,ML Engineer,24 Feb 2021
+Esme,Osei,https://www.linkedin.com/in/esme-osei-784,,Bramblewood AI,Co-founder & CTO,01 Mar 2024
+Ravi,Weber,https://www.linkedin.com/in/ravi-weber-572,,Lanternfish Data,Podcast host,21 May 2026
+Ravi,Kaur,https://www.linkedin.com/in/ravi-kaur-725,,Cinderpath,Staff Engineer,17 Sep 2026
+Ifeoma,Fischer,https://www.linkedin.com/in/ifeoma-fischer-160,,Gullwing Analytics,Co-founder & CTO,17 Jul 2021
+Ingrid,Brennan,https://www.linkedin.com/in/ingrid-brennan-232,,Microsoft,Staff Engineer,24 Jan 2023
+Beatriz,Nair,https://www.linkedin.com/in/beatriz-nair-507,,Salesforce,Co-founder & CTO,04 Oct 2019
+Thabo,Fischer,https://www.linkedin.com/in/thabo-fischer-182,,Meta,Co-founder & CTO,21 May 2026
+Rafael,Kim,https://www.linkedin.com/in/rafael-kim-511,,Bramblewood AI,ML Engineer,21 May 2026
+Farah,Yilmaz,https://www.linkedin.com/in/farah-yilmaz-240,,Meta,Podcast host,11 Aug 2019
+Joon,Dubois,https://www.linkedin.com/in/joon-dubois-984,,Saltmarsh Labs,Principal at a VC firm,04 Sep 2019
+Esme,Iyer,https://www.linkedin.com/in/esme-iyer-467,,Salesforce,Partnerships Manager,08 Apr 2020
+Mariam,Osei,https://www.linkedin.com/in/mariam-osei-336,,Thimble AI,Head of Community & Events,30 Mar 2024
+Elif,Ferreira,https://www.linkedin.com/in/elif-ferreira-280,,Microsoft,Podcast host,22 Mar 2020
+Elif,Kowalski,https://www.linkedin.com/in/elif-kowalski-774,,Quietloop,Developer Relations Lead,21 May 2020
+Kwame,Raman,https://www.linkedin.com/in/kwame-raman-596,,Microsoft,Product Manager,07 Nov 2023
+Celeste,Popescu,https://www.linkedin.com/in/celeste-popescu-286,,Tinderbox Labs,Staff Engineer,08 Oct 2026
+Arjun,Brennan,https://www.linkedin.com/in/arjun-brennan-104,,Microsoft,Head of Community & Events,27 Apr 2024
+Elif,Iyer,https://www.linkedin.com/in/elif-iyer-647,,NVIDIA,Product Manager,12 Mar 2026
+Freya,Quispe,https://www.linkedin.com/in/freya-quispe-679,,Pebblestack,Software Engineer,08 Oct 2026
+Oskar,Lindqvist,https://www.linkedin.com/in/oskar-lindqvist-807,,Amazon,Developer Relations Lead,09 Jul 2026
+Viktor,Rossi,https://www.linkedin.com/in/viktor-rossi-732,,Salesforce,Software Engineer,25 Sep 2019
+Adaeze,Park,https://www.linkedin.com/in/adaeze-park-857,,Tinderbox Labs,ML Engineer,22 Mar 2024
+Amara,Nakamura,https://www.linkedin.com/in/amara-nakamura-991,,NVIDIA,Developer Relations Lead,27 Jun 2020
+Sanjay,Park,https://www.linkedin.com/in/sanjay-park-917,,Meta,Software Engineer,04 Sep 2022
+Farah,Varga,https://www.linkedin.com/in/farah-varga-507,,Amazon,Partnerships Manager,21 May 2026
+Thabo,Varga,https://www.linkedin.com/in/thabo-varga-206,,Gullwing Analytics,Co-founder & CTO,08 Oct 2026
+Ayesha,Bauer,https://www.linkedin.com/in/ayesha-bauer-510,,Google,Founder & CEO,11 Dec 2019
+Amara,Sato,https://www.linkedin.com/in/amara-sato-168,,Tinderbox Labs,Product Manager,05 Jan 2024
+Ingrid,Kim,https://www.linkedin.com/in/ingrid-kim-266,,NVIDIA,Founder & CEO,24 Jul 2026
+Ifeoma,Petrov,https://www.linkedin.com/in/ifeoma-petrov-715,,Microsoft,Podcast host,10 May 2025
+Amara,Novak,https://www.linkedin.com/in/amara-novak-100,,Pebblestack,Developer Relations Lead,21 May 2026
+Emeka,Mensah,https://www.linkedin.com/in/emeka-mensah-649,,Larkspur Systems,Developer Relations Lead,09 Jul 2026
+Mateo,Bianchi,https://www.linkedin.com/in/mateo-bianchi-728,,Lanternfish Data,Research Scientist,17 Sep 2026
+Jonas,Tanaka,https://www.linkedin.com/in/jonas-tanaka-995,,Tinderbox Labs,Software Engineer,04 Aug 2021
+Ingrid,Quispe,https://www.linkedin.com/in/ingrid-quispe-485,,Google,Head of Community & Events,11 Aug 2021
+Elif,Bauer,https://www.linkedin.com/in/elif-bauer-358,,Amazon,Co-founder & CTO,12 Mar 2026
+Ravi,Larsen,https://www.linkedin.com/in/ravi-larsen-472,,Mossgate,Founder & CEO,15 Jun 2026
+Ayesha,Haddad,https://www.linkedin.com/in/ayesha-haddad-218,,Microsoft,Podcast host,09 Jul 2026
+Viktor,Fischer,https://www.linkedin.com/in/viktor-fischer-577,,Google,Software Engineer,23 Apr 2026
+Ayesha,Eze,https://www.linkedin.com/in/ayesha-eze-419,,Gullwing Analytics,Head of Community & Events,28 Jan 2021
+Lucía,Mensah,https://www.linkedin.com/in/lucia-mensah-204,,Meta,ML Engineer,17 Sep 2026
+Beatriz,Petrov,https://www.linkedin.com/in/beatriz-petrov-858,,Gullwing Analytics,ML Engineer,03 Mar 2025
+Arjun,Eze,https://www.linkedin.com/in/arjun-eze-948,,Quietloop,Research Scientist,15 Jan 2022
+Teodor,Kaur,https://www.linkedin.com/in/teodor-kaur-628,,Cinderpath,Podcast host,08 Oct 2026
+Jonas,Achebe,https://www.linkedin.com/in/jonas-achebe-640,,Microsoft,Product Manager,20 May 2023
+Freya,Mensah,https://www.linkedin.com/in/freya-mensah-806,,Kestrel Graph,Co-founder & CTO,03 Oct 2020
+Linnea,Weber,https://www.linkedin.com/in/linnea-weber-876,,NVIDIA,ML Engineer,02 Feb 2023
+Bruno,Abara,https://www.linkedin.com/in/bruno-abara-758,,Kestrel Graph,Founder & CEO,17 Sep 2026
+Nadia,Ferreira,https://www.linkedin.com/in/nadia-ferreira-812,,Meta,Principal at a VC firm,09 Jul 2026
+Viktor,Castillo,https://www.linkedin.com/in/viktor-castillo-630,,Quietloop,Founder & CEO,19 Mar 2021
+Freya,Kaur,https://www.linkedin.com/in/freya-kaur-464,,Tinderbox Labs,Software Engineer,19 Feb 2026
+Sanjay,Kowalski,https://www.linkedin.com/in/sanjay-kowalski-645,,Bramblewood AI,Staff Engineer,18 Oct 2020
+Linnea,Rossi,https://www.linkedin.com/in/linnea-rossi-437,,NVIDIA,Principal at a VC firm,14 Mar 2021
+Sven,Kowalski,https://www.linkedin.com/in/sven-kowalski-727,,Larkspur Systems,Founder & CEO,22 Oct 2024
+Rahel,Sato,https://www.linkedin.com/in/rahel-sato-925,,Brightfjord,Head of Community & Events,27 Feb 2021
+Mei,Varga,https://www.linkedin.com/in/mei-varga-857,,Paperlantern AI,Podcast host,16 May 2023
+Rahel,Kowalski,https://www.linkedin.com/in/rahel-kowalski-304,,Cinderpath,Research Scientist,17 Oct 2021
+Bruno,Fischer,https://www.linkedin.com/in/bruno-fischer-464,,Fernhollow,Podcast host,01 Dec 2023
+Kai,Weber,https://www.linkedin.com/in/kai-weber-128,,Amazon,Software Engineer,20 Mar 2024
+Maren,Yilmaz,https://www.linkedin.com/in/maren-yilmaz-583,,NVIDIA,Principal at a VC firm,02 Oct 2019
+Arjun,Sato,https://www.linkedin.com/in/arjun-sato-809,,Fernhollow,Product Manager,20 Sep 2024
+Tariq,Delgado,https://www.linkedin.com/in/tariq-delgado-557,,Saltmarsh Labs,Software Engineer,26 Sep 2024
+Rahel,Delgado,https://www.linkedin.com/in/rahel-delgado-473,,Orbitwise,Research Scientist,16 Apr 2019
+Lucía,Kowalski,https://www.linkedin.com/in/lucia-kowalski-204,,Brightfjord,Principal at a VC firm,17 Sep 2026
+Kwame,Eze,https://www.linkedin.com/in/kwame-eze-301,,Salesforce,Podcast host,26 Sep 2019
+Leilani,Achebe,https://www.linkedin.com/in/leilani-achebe-594,,Pebblestack,Principal at a VC firm,31 Jan 2022
+Greta,Quispe,https://www.linkedin.com/in/greta-quispe-960,,Pebblestack,Founder & CEO,03 May 2021
+Priya,Eze,https://www.linkedin.com/in/priya-eze-768,,Heronfield,Principal at a VC firm,25 Mar 2021
+Ravi,Adeyemi,https://www.linkedin.com/in/ravi-adeyemi-186,,Pebblestack,Founder & CEO,22 Nov 2020
+Celeste,Morales,https://www.linkedin.com/in/celeste-morales-222,,Heronfield,ML Engineer,09 Jul 2026
+Lior,Osei,https://www.linkedin.com/in/lior-osei-901,,Amazon,Research Scientist,04 Mar 2020
+Esme,Sato,https://www.linkedin.com/in/esme-sato-589,,Microsoft,Podcast host,20 Feb 2023
+Idris,Moreau,https://www.linkedin.com/in/idris-moreau-544,,NVIDIA,Head of Community & Events,08 Oct 2026
+Maren,Bauer,https://www.linkedin.com/in/maren-bauer-440,,Heronfield,Developer Relations Lead,27 Jul 2025
+Lucía,Varga,https://www.linkedin.com/in/lucia-varga-574,,Meta,Staff Engineer,08 Oct 2026
+Thabo,Ferreira,https://www.linkedin.com/in/thabo-ferreira-842,,Heronfield,Product Manager,15 Jul 2019
+Rafael,Kaur,https://www.linkedin.com/in/rafael-kaur-230,,Amazon,Co-founder & CTO,02 Apr 2019
+Jonas,Mensah,https://www.linkedin.com/in/jonas-mensah-704,,Fernhollow,Principal at a VC firm,27 Dec 2024
+Wren,Nakamura,https://www.linkedin.com/in/wren-nakamura-925,,Cinderpath,Principal at a VC firm,08 Oct 2026
+Adaeze,Mensah,https://www.linkedin.com/in/adaeze-mensah-726,,Saltmarsh Labs,Founder & CEO,03 Sep 2020
+Joon,Larsen,https://www.linkedin.com/in/joon-larsen-585,,Microsoft,ML Engineer,18 Dec 2021
+Paolo,Delgado,https://www.linkedin.com/in/paolo-delgado-259,,Quillmark,Podcast host,01 Sep 2025
+Farah,Mwangi,https://www.linkedin.com/in/farah-mwangi-234,,Amazon,Partnerships Manager,11 Jul 2024
+Jonas,Raman,https://www.linkedin.com/in/jonas-raman-918,,Paperlantern AI,Software Engineer,21 May 2026
+Kai,Adeyemi,https://www.linkedin.com/in/kai-adeyemi-205,,Brightfjord,Software Engineer,18 Mar 2021
+Bruno,Lindqvist,https://www.linkedin.com/in/bruno-lindqvist-544,,Heronfield,Co-founder & CTO,12 Mar 2026
+Nadia,Sato,https://www.linkedin.com/in/nadia-sato-945,,Heronfield,Founder & CEO,18 Jul 2019
+Nadia,Achebe,https://www.linkedin.com/in/nadia-achebe-128,,Quillmark,Staff Engineer,17 Sep 2026
+Arjun,Achebe,https://www.linkedin.com/in/arjun-achebe-399,,Salesforce,ML Engineer,19 Dec 2020
+Imani,Nair,https://www.linkedin.com/in/imani-nair-882,,Lanternfish Data,Developer Relations Lead,09 Jul 2026
+Rosa,Holm,https://www.linkedin.com/in/rosa-holm-365,,Quillmark,Developer Relations Lead,13 Nov 2024
+Linnea,Iyer,https://www.linkedin.com/in/linnea-iyer-954,,Thimble AI,Podcast host,26 Nov 2020
+Noor,Okafor,https://www.linkedin.com/in/noor-okafor-857,,Salesforce,Staff Engineer,25 Feb 2021
+Ravi,Nakamura,https://www.linkedin.com/in/ravi-nakamura-778,,Lanternfish Data,Principal at a VC firm,27 Jan 2026
+Rosa,Ali,https://www.linkedin.com/in/rosa-ali-530,,NVIDIA,Research Scientist,13 Dec 2024
+Joon,Rossi,https://www.linkedin.com/in/joon-rossi-233,,Meta,Software Engineer,14 Jun 2022
+Linnea,Mensah,https://www.linkedin.com/in/linnea-mensah-636,,Bramblewood AI,Product Manager,03 Dec 2020
+Imani,Weber,https://www.linkedin.com/in/imani-weber-993,,Brightfjord,Software Engineer,13 Nov 2022
+Saoirse,Moreau,https://www.linkedin.com/in/saoirse-moreau-723,,Paperlantern AI,Software Engineer,24 Jun 2019
+Priya,Mensah,https://www.linkedin.com/in/priya-mensah-276,,Paperlantern AI,Staff Engineer,08 Oct 2026
+Elif,Eze,https://www.linkedin.com/in/elif-eze-733,,Amazon,Co-founder & CTO,28 Sep 2019
+Kai,Haddad,https://www.linkedin.com/in/kai-haddad-669,,Lanternfish Data,ML Engineer,12 Mar 2026
+Amara,Holm,https://www.linkedin.com/in/amara-holm-798,,Cinderpath,ML Engineer,21 May 2026
+Bruno,Ali,https://www.linkedin.com/in/bruno-ali-668,,Gullwing Analytics,Head of Community & Events,03 Mar 2022
+Ayesha,Novak,https://www.linkedin.com/in/ayesha-novak-673,,Bramblewood AI,Head of Community & Events,07 Dec 2025
+Amara,Nair,https://www.linkedin.com/in/amara-nair-295,,Kestrel Graph,Product Manager,07 Feb 2020
+Zofia,Ortega,https://www.linkedin.com/in/zofia-ortega-890,,Google,Staff Engineer,06 Jun 2021
+Mateo,Rossi,https://www.linkedin.com/in/mateo-rossi-563,,Cinderpath,Principal at a VC firm,21 May 2026
+Farah,Weber,https://www.linkedin.com/in/farah-weber-878,,Fernhollow,Software Engineer,25 Jan 2021
+Wren,Tanaka,https://www.linkedin.com/in/wren-tanaka-553,,Heronfield,Head of Community & Events,08 Mar 2022
+Oskar,Quispe,https://www.linkedin.com/in/oskar-quispe-617,,Lanternfish Data,Staff Engineer,12 Mar 2026
+Tariq,Rossi,https://www.linkedin.com/in/tariq-rossi-304,,Marigold Robotics,ML Engineer,02 Jul 2023
+Teodor,Yilmaz,https://www.linkedin.com/in/teodor-yilmaz-563,,Salesforce,Product Manager,21 May 2026
+Imani,Jansen,https://www.linkedin.com/in/imani-jansen-926,,Quillmark,Product Manager,27 Jan 2026
+Ayesha,Rossi,https://www.linkedin.com/in/ayesha-rossi-353,,Quillmark,Founder & CEO,15 Oct 2025
+Teodor,Ali,https://www.linkedin.com/in/teodor-ali-997,,Larkspur Systems,Head of Community & Events,17 Sep 2026
+Idris,Castillo,https://www.linkedin.com/in/idris-castillo-672,,Marigold Robotics,Staff Engineer,19 Nov 2021
+Wren,Sato,https://www.linkedin.com/in/wren-sato-960,,Marigold Robotics,Founder & CEO,01 Sep 2021
+Saoirse,Lindqvist,https://www.linkedin.com/in/saoirse-lindqvist-526,,Microsoft,Developer Relations Lead,03 Dec 2025
+Ifeoma,Varga,https://www.linkedin.com/in/ifeoma-varga-552,,Marigold Robotics,Co-founder & CTO,25 Aug 2021
+Oskar,Tanaka,https://www.linkedin.com/in/oskar-tanaka-787,,Brightfjord,Developer Relations Lead,11 Mar 2021
+Mei,Dubois,https://www.linkedin.com/in/mei-dubois-174,,NVIDIA,Founder & CEO,23 Mar 2020
+Ingrid,Morales,https://www.linkedin.com/in/ingrid-morales-410,,NVIDIA,Developer Relations Lead,17 Sep 2026
+Maren,Haddad,https://www.linkedin.com/in/maren-haddad-895,,Lanternfish Data,Staff Engineer,03 Feb 2026
+Elif,Adeyemi,https://www.linkedin.com/in/elif-adeyemi-776,,Meta,Software Engineer,16 Jul 2023
+Arjun,Lindqvist,https://www.linkedin.com/in/arjun-lindqvist-578,,Larkspur Systems,Product Manager,25 Jul 2021
+Kwame,Novak,https://www.linkedin.com/in/kwame-novak-507,,Salesforce,Podcast host,12 Mar 2026
+Idris,Fischer,https://www.linkedin.com/in/idris-fischer-266,,Pebblestack,Head of Community & Events,17 Sep 2026
+Paolo,Kowalski,https://www.linkedin.com/in/paolo-kowalski-265,,Cobaltfern,Staff Engineer,08 Feb 2024
+Esme,Dubois,https://www.linkedin.com/in/esme-dubois-627,,Heronfield,Product Manager,19 Jan 2021
+Thabo,Petrov,https://www.linkedin.com/in/thabo-petrov-531,,NVIDIA,Software Engineer,11 Mar 2020
+Diego,Delgado,https://www.linkedin.com/in/diego-delgado-426,,Thimble AI,Research Scientist,29 Mar 2021
+Lucía,Bianchi,https://www.linkedin.com/in/lucia-bianchi-119,,Larkspur Systems,ML Engineer,17 Sep 2026
+Leilani,Mwangi,https://www.linkedin.com/in/leilani-mwangi-569,,Fernhollow,Podcast host,15 Feb 2024
+Saoirse,Weber,https://www.linkedin.com/in/saoirse-weber-493,,Orbitwise,Founder & CEO,19 Nov 2025
+Leilani,Ali,https://www.linkedin.com/in/leilani-ali-738,,Pebblestack,Software Engineer,26 Jun 2023
+Yusuf,Rossi,https://www.linkedin.com/in/yusuf-rossi-165,,NVIDIA,ML Engineer,18 Jan 2026
+Ifeoma,Kowalski,https://www.linkedin.com/in/ifeoma-kowalski-997,,Larkspur Systems,Head of Community & Events,17 Sep 2026
+Mateo,Ferreira,https://www.linkedin.com/in/mateo-ferreira-371,,Mossgate,Product Manager,12 Mar 2026
+Wren,Moreau,https://www.linkedin.com/in/wren-moreau-376,,Tinderbox Labs,Co-founder & CTO,22 Aug 2020
+Ola,Lindqvist,https://www.linkedin.com/in/ola-lindqvist-939,,Gullwing Analytics,Podcast host,23 Feb 2025
+Hiro,Park,https://www.linkedin.com/in/hiro-park-938,,Fernhollow,Partnerships Manager,01 Aug 2021
+Arjun,Varga,https://www.linkedin.com/in/arjun-varga-252,,Microsoft,Podcast host,12 Aug 2026
+Emeka,Fischer,https://www.linkedin.com/in/emeka-fischer-817,,Pebblestack,Software Engineer,05 Aug 2022
+Oskar,Ferreira,https://www.linkedin.com/in/oskar-ferreira-385,,Bramblewood AI,Product Manager,24 Jan 2023
+Hana,Dubois,https://www.linkedin.com/in/hana-dubois-174,,Paperlantern AI,Product Manager,22 Aug 2022
+Zofia,Weber,https://www.linkedin.com/in/zofia-weber-749,,Fernhollow,Research Scientist,12 Mar 2026
+Lucía,Castillo,https://www.linkedin.com/in/lucia-castillo-185,,Cinderpath,Podcast host,20 Feb 2020
+Tariq,Kowalski,https://www.linkedin.com/in/tariq-kowalski-168,,Meta,Co-founder & CTO,20 Nov 2022
+Arjun,Haddad,https://www.linkedin.com/in/arjun-haddad-564,,Meta,Co-founder & CTO,27 Oct 2025
+Priya,Petrov,https://www.linkedin.com/in/priya-petrov-666,,Microsoft,Podcast host,21 May 2026
+Valentina,Yilmaz,https://www.linkedin.com/in/valentina-yilmaz-736,,Mossgate,Staff Engineer,12 Mar 2026
+Noor,Ortega,https://www.linkedin.com/in/noor-ortega-639,,Saltmarsh Labs,Co-founder & CTO,06 Jun 2024
+Esme,Nair,https://www.linkedin.com/in/esme-nair-212,,Tinderbox Labs,Staff Engineer,21 May 2026
+Rafael,Castillo,https://www.linkedin.com/in/rafael-castillo-151,,Google,Staff Engineer,09 Jul 2026
+Hana,Sato,https://www.linkedin.com/in/hana-sato-419,,Microsoft,Partnerships Manager,31 Jul 2026
+Sven,Abara,https://www.linkedin.com/in/sven-abara-643,,Fernhollow,Podcast host,08 Oct 2026
+Ola,Achebe,https://www.linkedin.com/in/ola-achebe-396,,Google,Staff Engineer,08 Jun 2024
+Saoirse,Rossi,https://www.linkedin.com/in/saoirse-rossi-788,,Salesforce,Software Engineer,12 Mar 2026
+Hana,Yilmaz,https://www.linkedin.com/in/hana-yilmaz-455,,Marigold Robotics,Head of Community & Events,22 Nov 2024
+Rahel,Weber,https://www.linkedin.com/in/rahel-weber-356,,NVIDIA,Developer Relations Lead,27 Oct 2021
+Tomás,Raman,https://www.linkedin.com/in/tomas-raman-118,,Cinderpath,Developer Relations Lead,28 Sep 2022
+Kai,Rossi,https://www.linkedin.com/in/kai-rossi-664,,Salesforce,Research Scientist,28 Apr 2020
+Diego,Rossi,https://www.linkedin.com/in/diego-rossi-586,,Cinderpath,Head of Community & Events,25 Dec 2019
+Mei,Kim,https://www.linkedin.com/in/mei-kim-208,,Amazon,Product Manager,21 Jun 2023
+Paolo,Adeyemi,https://www.linkedin.com/in/paolo-adeyemi-542,,Paperlantern AI,Software Engineer,17 Sep 2026
+Paolo,Fischer,https://www.linkedin.com/in/paolo-fischer-659,,Amazon,Software Engineer,10 Nov 2025
+Celeste,Varga,https://www.linkedin.com/in/celeste-varga-618,,Google,Founder & CEO,17 Sep 2026
+Camille,Horvat,https://www.linkedin.com/in/camille-horvat-320,,NVIDIA,ML Engineer,09 May 2026
+Kwame,Petrov,https://www.linkedin.com/in/kwame-petrov-303,,Cinderpath,Founder & CEO,22 May 2022
+Celeste,Bauer,https://www.linkedin.com/in/celeste-bauer-243,,Marigold Robotics,Software Engineer,26 Jun 2025
+Thabo,Delgado,https://www.linkedin.com/in/thabo-delgado-155,,Heronfield,Principal at a VC firm,12 Mar 2026
+Celeste,Lindqvist,https://www.linkedin.com/in/celeste-lindqvist-114,,Salesforce,Principal at a VC firm,03 Jan 2024
+Kenji,Bauer,https://www.linkedin.com/in/kenji-bauer-858,,Orbitwise,Podcast host,24 May 2026
+Hiro,Kaur,https://www.linkedin.com/in/hiro-kaur-156,,Quillmark,Product Manager,19 May 2021
+Lucía,Morales,https://www.linkedin.com/in/lucia-morales-961,,Gullwing Analytics,Software Engineer,13 May 2020
+Anouk,Rossi,https://www.linkedin.com/in/anouk-rossi-786,,Brightfjord,Co-founder & CTO,08 Oct 2026
+Yusuf,Larsen,https://www.linkedin.com/in/yusuf-larsen-348,,Cobaltfern,Staff Engineer,07 Feb 2023
+Teodor,Brennan,https://www.linkedin.com/in/teodor-brennan-146,,Google,Staff Engineer,02 Apr 2025
+Dmitri,Moreau,https://www.linkedin.com/in/dmitri-moreau-261,,Google,Partnerships Manager,16 Feb 2019
+Zofia,Kim,https://www.linkedin.com/in/zofia-kim-103,,Bramblewood AI,Podcast host,24 Sep 2025
+Arjun,Bianchi,https://www.linkedin.com/in/arjun-bianchi-436,,Paperlantern AI,Principal at a VC firm,03 Dec 2023
+Farah,Holm,https://www.linkedin.com/in/farah-holm-350,,Google,Founder & CEO,26 Mar 2026
+Tomás,Abara,https://www.linkedin.com/in/tomas-abara-323,,Tinderbox Labs,Product Manager,29 Jan 2024
+Ravi,Moreau,https://www.linkedin.com/in/ravi-moreau-101,,Microsoft,Head of Community & Events,22 Dec 2025
+Leilani,Osei,https://www.linkedin.com/in/leilani-osei-185,,Google,Head of Community & Events,28 Sep 2025
+Ayesha,Yilmaz,https://www.linkedin.com/in/ayesha-yilmaz-614,,Meta,Principal at a VC firm,21 Mar 2023
+Adaeze,Sato,https://www.linkedin.com/in/adaeze-sato-354,,Cinderpath,Partnerships Manager,02 Jan 2022
+Imani,Raman,https://www.linkedin.com/in/imani-raman-193,,Paperlantern AI,Principal at a VC firm,08 Oct 2026
+Arjun,Ferreira,https://www.linkedin.com/in/arjun-ferreira-247,,Tinderbox Labs,Research Scientist,15 Dec 2019
+Thabo,Popescu,https://www.linkedin.com/in/thabo-popescu-142,,NVIDIA,Partnerships Manager,21 May 2026
+Thabo,Weber,https://www.linkedin.com/in/thabo-weber-406,,Orbitwise,Software Engineer,09 Jul 2026
+Camille,Bauer,https://www.linkedin.com/in/camille-bauer-338,,Mossgate,Product Manager,25 Dec 2022
+Lucía,Popescu,https://www.linkedin.com/in/lucia-popescu-641,,Orbitwise,Co-founder & CTO,07 Nov 2024
+Viktor,Mensah,https://www.linkedin.com/in/viktor-mensah-773,,Larkspur Systems,Research Scientist,12 Mar 2026
+Oskar,Mensah,https://www.linkedin.com/in/oskar-mensah-777,,Larkspur Systems,Head of Community & Events,07 Jul 2023

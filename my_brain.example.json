@@ -1,0 +1,12 @@
+{
+  "events": {
+    "2026-03-14": "AI Engineer Summit",
+    "2026-06-07": "Graph Hackathon SF"
+  },
+  "skip_companies": [
+    "Example Subsidiary Inc."
+  ],
+  "competitors": [
+    "Example Rival Inc."
+  ]
+}
