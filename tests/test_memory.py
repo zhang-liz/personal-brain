@@ -55,6 +55,14 @@ def run(g):
     r = memory.remember(g, name, note="talked about agent memory")
     check(r["status"] == "needs_choice" and len(r["candidates"]) == 2, "same name, no company: asks which one")
 
+    # A typo of someone you know asks too, and saves nothing.
+    uid, uname = g.ro_query("MATCH (p:Person) WITH p.name AS n, collect(p.id) AS ids WHERE size(ids) = 1"
+                            " AND size(split(n, ' ')[0]) >= 5 RETURN ids[0], n LIMIT 1").result_set[0]
+    notes = g.ro_query("MATCH (n:Note) RETURN count(n)").result_set[0][0]
+    r = memory.remember(g, uname.split()[0][:-1] + " " + " ".join(uname.split()[1:]), note="typo test")
+    check(r["status"] == "needs_choice" and uid in [c["id"] for c in r["candidates"]] and
+          g.ro_query("MATCH (n:Note) RETURN count(n)").result_set[0][0] == notes, "typo of a known name: asks, saves nothing")
+
     company = g.ro_query("MATCH (p:Person {id: $id})-[:WORKED_AT {current: true}]->(c) RETURN c.name LIMIT 1",
                          {"id": ids[0]}).result_set[0][0]
     other = g.ro_query("MATCH (p:Person {id: $id})-[:WORKED_AT]->(c) RETURN collect(c.name)", {"id": ids[1]}).result_set[0][0]

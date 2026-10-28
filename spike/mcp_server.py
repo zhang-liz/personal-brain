@@ -45,7 +45,7 @@ def remember(name: str, company: str = "", event: str = "", note: str = "",
 
     name: the person's full name. company: where they work now. event: where you met.
     note: what you talked about, in the user's words.
-    It matches the name to people already in the graph. If it is not sure which person it is, it saves
+    It matches the name, typos included, to people already in the graph. If it is not sure which person it is, it saves
     nothing and returns candidates: ask the user, then call again with person_id (from the candidates)
     or new_person=true. A new company ends their old job and keeps it in their history."""
     return answer(memory.remember, name, company, event, note, person_id, new_person)
