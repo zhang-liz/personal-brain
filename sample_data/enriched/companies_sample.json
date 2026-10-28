@@ -1,0 +1,511 @@
+{
+ "items": [
+  {
+   "name": "Kestrel Graph",
+   "searchTerm": "Kestrel Graph",
+   "fundingRounds": [
+    {
+     "round": "Series A",
+     "investors": [
+      "Harborlight Ventures",
+      "Granite Owl Capital",
+      "Saffron Seed"
+     ],
+     "leadInvestors": [
+      "Harborlight Ventures"
+     ]
+    }
+   ],
+   "employeeCount": "11-50",
+   "ipoStatus": "private",
+   "operatingStatus": "active",
+   "numInvestors": 3,
+   "industries": [
+    "Artificial Intelligence",
+    "Software"
+   ]
+  },
+  {
+   "name": "Paperlantern AI",
+   "searchTerm": "Paperlantern AI",
+   "fundingRounds": [
+    {
+     "round": "Series A",
+     "investors": [
+      "Riverstone Seed",
+      "Copperleaf Ventures",
+      "Bluewater Fund",
+      "Tallgrass Partners"
+     ],
+     "leadInvestors": [
+      "Riverstone Seed"
+     ]
+    }
+   ],
+   "employeeCount": "51-100",
+   "ipoStatus": "private",
+   "operatingStatus": "active",
+   "numInvestors": 4,
+   "industries": [
+    "Artificial Intelligence",
+    "Software"
+   ]
+  },
+  {
+   "name": "Quietloop",
+   "searchTerm": "Quietloop",
+   "fundingRounds": [
+    {
+     "round": "Series A",
+     "investors": [
+      "Bluewater Fund",
+      "Tallgrass Partners"
+     ],
+     "leadInvestors": [
+      "Bluewater Fund"
+     ]
+    }
+   ],
+   "employeeCount": "11-50",
+   "ipoStatus": "private",
+   "operatingStatus": "active",
+   "numInvestors": 2,
+   "industries": [
+    "Artificial Intelligence",
+    "Software"
+   ]
+  },
+  {
+   "name": "Brightfjord",
+   "searchTerm": "Brightfjord",
+   "fundingRounds": [
+    {
+     "round": "Series A",
+     "investors": [
+      "Juniper Angels",
+      "Bluewater Fund",
+      "Saffron Seed"
+     ],
+     "leadInvestors": [
+      "Juniper Angels"
+     ]
+    }
+   ],
+   "employeeCount": "101-250",
+   "ipoStatus": "private",
+   "operatingStatus": "active",
+   "numInvestors": 3,
+   "industries": [
+    "Artificial Intelligence",
+    "Software"
+   ]
+  },
+  {
+   "name": "Saltmarsh Labs",
+   "searchTerm": "Saltmarsh Labs",
+   "fundingRounds": [
+    {
+     "round": "Pre Seed",
+     "investors": [
+      "Granite Owl Capital",
+      "Saffron Seed",
+      "Tallgrass Partners",
+      "Harborlight Ventures"
+     ],
+     "leadInvestors": [
+      "Granite Owl Capital"
+     ]
+    }
+   ],
+   "employeeCount": "1-10",
+   "ipoStatus": "private",
+   "operatingStatus": "active",
+   "numInvestors": 4,
+   "industries": [
+    "Artificial Intelligence",
+    "Software"
+   ]
+  },
+  {
+   "name": "Cobaltfern",
+   "searchTerm": "Cobaltfern",
+   "fundingRounds": [
+    {
+     "round": "Series A",
+     "investors": [
+      "Bluewater Fund",
+      "Saffron Seed"
+     ],
+     "leadInvestors": [
+      "Bluewater Fund"
+     ]
+    }
+   ],
+   "employeeCount": "51-100",
+   "ipoStatus": "private",
+   "operatingStatus": "active",
+   "numInvestors": 2,
+   "industries": [
+    "Artificial Intelligence",
+    "Software"
+   ]
+  },
+  {
+   "name": "Thimble AI",
+   "searchTerm": "Thimble AI",
+   "fundingRounds": [
+    {
+     "round": "Series A",
+     "investors": [
+      "Copperleaf Ventures",
+      "Saffron Seed",
+      "Granite Owl Capital",
+      "Harborlight Ventures"
+     ],
+     "leadInvestors": [
+      "Copperleaf Ventures"
+     ]
+    }
+   ],
+   "employeeCount": "11-50",
+   "ipoStatus": "private",
+   "operatingStatus": "active",
+   "numInvestors": 4,
+   "industries": [
+    "Artificial Intelligence",
+    "Software"
+   ]
+  },
+  {
+   "name": "Lanternfish Data",
+   "searchTerm": "Lanternfish Data",
+   "fundingRounds": [
+    {
+     "round": "Series A",
+     "investors": [
+      "Granite Owl Capital",
+      "Juniper Angels",
+      "Bluewater Fund",
+      "Tallgrass Partners"
+     ],
+     "leadInvestors": [
+      "Granite Owl Capital"
+     ]
+    }
+   ],
+   "employeeCount": "251-500",
+   "ipoStatus": "private",
+   "operatingStatus": "active",
+   "numInvestors": 4,
+   "industries": [
+    "Artificial Intelligence",
+    "Software"
+   ]
+  },
+  {
+   "name": "Pebblestack",
+   "searchTerm": "Pebblestack",
+   "fundingRounds": [
+    {
+     "round": "Pre Seed",
+     "investors": [
+      "Granite Owl Capital",
+      "Saffron Seed",
+      "Riverstone Seed",
+      "Copperleaf Ventures"
+     ],
+     "leadInvestors": [
+      "Granite Owl Capital"
+     ]
+    }
+   ],
+   "employeeCount": "1-10",
+   "ipoStatus": "private",
+   "operatingStatus": "active",
+   "numInvestors": 4,
+   "industries": [
+    "Artificial Intelligence",
+    "Software"
+   ]
+  },
+  {
+   "name": "Cinderpath",
+   "searchTerm": "Cinderpath",
+   "fundingRounds": [
+    {
+     "round": "Series A",
+     "investors": [
+      "Granite Owl Capital",
+      "Juniper Angels",
+      "Tallgrass Partners",
+      "Copperleaf Ventures"
+     ],
+     "leadInvestors": [
+      "Granite Owl Capital"
+     ]
+    }
+   ],
+   "employeeCount": "11-50",
+   "ipoStatus": "private",
+   "operatingStatus": "active",
+   "numInvestors": 4,
+   "industries": [
+    "Artificial Intelligence",
+    "Software"
+   ]
+  },
+  {
+   "name": "Marigold Robotics",
+   "searchTerm": "Marigold Robotics",
+   "fundingRounds": [
+    {
+     "round": "Series A",
+     "investors": [
+      "Copperleaf Ventures",
+      "Tallgrass Partners",
+      "Juniper Angels",
+      "Riverstone Seed"
+     ],
+     "leadInvestors": [
+      "Copperleaf Ventures"
+     ]
+    }
+   ],
+   "employeeCount": "51-100",
+   "ipoStatus": "private",
+   "operatingStatus": "active",
+   "numInvestors": 4,
+   "industries": [
+    "Artificial Intelligence",
+    "Software"
+   ]
+  },
+  {
+   "name": "Fernhollow",
+   "searchTerm": "Fernhollow",
+   "fundingRounds": [
+    {
+     "round": "Pre Seed",
+     "investors": [
+      "Copperleaf Ventures",
+      "Juniper Angels",
+      "Granite Owl Capital"
+     ],
+     "leadInvestors": [
+      "Copperleaf Ventures"
+     ]
+    }
+   ],
+   "employeeCount": "1-10",
+   "ipoStatus": "private",
+   "operatingStatus": "active",
+   "numInvestors": 3,
+   "industries": [
+    "Artificial Intelligence",
+    "Software"
+   ]
+  },
+  {
+   "name": "Orbitwise",
+   "searchTerm": "Orbitwise",
+   "fundingRounds": [
+    {
+     "round": "Series A",
+     "investors": [
+      "Saffron Seed",
+      "Bluewater Fund",
+      "Copperleaf Ventures",
+      "Juniper Angels"
+     ],
+     "leadInvestors": [
+      "Saffron Seed"
+     ]
+    }
+   ],
+   "employeeCount": "11-50",
+   "ipoStatus": "private",
+   "operatingStatus": "active",
+   "numInvestors": 4,
+   "industries": [
+    "Artificial Intelligence",
+    "Software"
+   ]
+  },
+  {
+   "name": "Gullwing Analytics",
+   "searchTerm": "Gullwing Analytics",
+   "fundingRounds": [
+    {
+     "round": "Pre Seed",
+     "investors": [
+      "Bluewater Fund",
+      "Granite Owl Capital",
+      "Juniper Angels"
+     ],
+     "leadInvestors": [
+      "Bluewater Fund"
+     ]
+    }
+   ],
+   "employeeCount": "51-100",
+   "ipoStatus": "private",
+   "operatingStatus": "active",
+   "numInvestors": 3,
+   "industries": [
+    "Artificial Intelligence",
+    "Software"
+   ]
+  },
+  {
+   "name": "Mossgate",
+   "searchTerm": "Mossgate",
+   "fundingRounds": [
+    {
+     "round": "Pre Seed",
+     "investors": [
+      "Granite Owl Capital",
+      "Tallgrass Partners",
+      "Harborlight Ventures"
+     ],
+     "leadInvestors": [
+      "Granite Owl Capital"
+     ]
+    }
+   ],
+   "employeeCount": "1-10",
+   "ipoStatus": "private",
+   "operatingStatus": "active",
+   "numInvestors": 3,
+   "industries": [
+    "Artificial Intelligence",
+    "Software"
+   ]
+  },
+  {
+   "name": "Tinderbox Labs",
+   "searchTerm": "Tinderbox Labs",
+   "fundingRounds": [
+    {
+     "round": "Series A",
+     "investors": [
+      "Harborlight Ventures",
+      "Juniper Angels",
+      "Bluewater Fund",
+      "Granite Owl Capital"
+     ],
+     "leadInvestors": [
+      "Harborlight Ventures"
+     ]
+    }
+   ],
+   "employeeCount": "11-50",
+   "ipoStatus": "private",
+   "operatingStatus": "active",
+   "numInvestors": 4,
+   "industries": [
+    "Artificial Intelligence",
+    "Software"
+   ]
+  },
+  {
+   "name": "Heronfield",
+   "searchTerm": "Heronfield",
+   "fundingRounds": [
+    {
+     "round": "Series A",
+     "investors": [
+      "Juniper Angels",
+      "Tallgrass Partners",
+      "Granite Owl Capital",
+      "Bluewater Fund"
+     ],
+     "leadInvestors": [
+      "Juniper Angels"
+     ]
+    }
+   ],
+   "employeeCount": "101-250",
+   "ipoStatus": "private",
+   "operatingStatus": "active",
+   "numInvestors": 4,
+   "industries": [
+    "Artificial Intelligence",
+    "Software"
+   ]
+  },
+  {
+   "name": "Quillmark",
+   "searchTerm": "Quillmark",
+   "fundingRounds": [
+    {
+     "round": "Pre Seed",
+     "investors": [
+      "Bluewater Fund",
+      "Juniper Angels",
+      "Copperleaf Ventures",
+      "Granite Owl Capital"
+     ],
+     "leadInvestors": [
+      "Bluewater Fund"
+     ]
+    }
+   ],
+   "employeeCount": "1-10",
+   "ipoStatus": "private",
+   "operatingStatus": "active",
+   "numInvestors": 4,
+   "industries": [
+    "Artificial Intelligence",
+    "Software"
+   ]
+  },
+  {
+   "name": "Larkspur Systems",
+   "searchTerm": "Larkspur Systems",
+   "fundingRounds": [
+    {
+     "round": "Series A",
+     "investors": [
+      "Tallgrass Partners",
+      "Copperleaf Ventures"
+     ],
+     "leadInvestors": [
+      "Tallgrass Partners"
+     ]
+    }
+   ],
+   "employeeCount": "51-100",
+   "ipoStatus": "private",
+   "operatingStatus": "active",
+   "numInvestors": 2,
+   "industries": [
+    "Artificial Intelligence",
+    "Software"
+   ]
+  },
+  {
+   "name": "Bramblewood AI",
+   "searchTerm": "Bramblewood AI",
+   "fundingRounds": [
+    {
+     "round": "Pre Seed",
+     "investors": [
+      "Granite Owl Capital",
+      "Saffron Seed"
+     ],
+     "leadInvestors": [
+      "Granite Owl Capital"
+     ]
+    }
+   ],
+   "employeeCount": "11-50",
+   "ipoStatus": "private",
+   "operatingStatus": "active",
+   "numInvestors": 2,
+   "industries": [
+    "Artificial Intelligence",
+    "Software"
+   ]
+  }
+ ]
+}

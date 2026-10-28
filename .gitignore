@@ -1,0 +1,12 @@
+# Private data: LinkedIn export, enriched data, secrets, your own labels
+*LinkedInDataExport*
+data/
+.env
+my_brain.json
+*.zip
+
+# Not part of the code
+slides/
+.DS_Store
+__pycache__/
+.venv/
