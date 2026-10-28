@@ -94,6 +94,22 @@ def find(g, text, label=None, limit=10):
 
 # ---------- remember ----------
 
+def one_edit(a, b):
+    """True when b is a with at most one letter added, dropped or changed."""
+    if abs(len(a) - len(b)) > 1:
+        return False
+    i = 0
+    while i < min(len(a), len(b)) and a[i] == b[i]:
+        i += 1
+    return a[i + 1:] == b[i + 1:] or a[i:] == b[i + 1:] or a[i + 1:] == b[i:]
+
+
+def close(a, b):
+    """Same name give or take accents, case and 1 typo per word of 4+ letters (the rule find uses)."""
+    wa, wb = fold(a).split(), fold(b).split()
+    return len(wa) == len(wb) and all(x == y or (min(len(x), len(y)) >= 4 and one_edit(x, y)) for x, y in zip(wa, wb))
+
+
 def resolve(g, name, company, person_id, new_person):
     """Which Person is this? Returns (person, None) when sure, (None, candidates) when not."""
     if person_id:
@@ -101,8 +117,13 @@ def resolve(g, name, company, person_id, new_person):
         if not rows:
             raise ValueError(f"No person with id {person_id}. Use find to look it up.")
         return {"id": person_id, "name": rows[0][0], "new": False}, None
-    same = [] if new_person else [m for m in find(g, name, "Person", 20) if fold(m["name"]) == fold(name)]
+    matches = [] if new_person else find(g, name, "Person", 20)
+    same = [m for m in matches if fold(m["name"]) == fold(name)]
     if not same:
+        # A typo of someone you know, or a new person with a similar name: ask, never merge on a guess.
+        near = [m for m in matches if close(m["name"], name)]
+        if near:
+            return None, near
         return {"id": "note-" + uuid.uuid4().hex[:12], "name": name, "new": True}, None
     if company:
         # Any job in their history counts, past or current.
@@ -127,8 +148,8 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
     person, candidates = resolve(g, name, company, person_id, new_person)
     if person is None:
         return {"status": "needs_choice", "candidates": candidates,
-                "message": f"Not sure which {name} this is. Ask the user, then call remember again with "
-                           "person_id for one of these people, or new_person=true for someone new."}
+                "message": f"Not sure who {name} is: these people have the same or a similar name. Ask the user, "
+                           "then call remember again with person_id for one of them, or new_person=true for someone new."}
 
     today = today or date.today().isoformat()
     nid = "note-" + uuid.uuid4().hex[:12]
@@ -166,13 +187,6 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
               " CREATE (p)-[:WORKED_AT {current: true, since: $today, source: 'agent', note: $nid}]->(c)"
               " SET p.company = $company", cid=cid, company=company)
             changes.append(f"works at {company} now" + (f" (ended: {', '.join(n for _, n in now)})" if old and old[0][0] else ""))
-            # Guess: people who work there now probably know them. Marked with the note, like every write.
-            linked = q("MATCH (p:Person {id: $pid}), (c:Company {id: $cid})<-[:WORKED_AT {current: true}]-(o:Person)"
-                       " WHERE o <> p WITH p, o, c LIMIT 25"
-                       " MERGE (p)-[k:KNOWS {via: 'coworkers', place: c.name}]->(o) ON CREATE SET k.note = $nid"
-                       " RETURN count(o)", cid=cid)
-            if linked and linked[0][0]:
-                changes.append(f"guessed: knows {linked[0][0]} coworkers")
 
     if event:
         same = [m for m in find(g, event, "Event", 5) if fold(m["name"]) == fold(event)]
