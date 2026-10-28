@@ -64,7 +64,8 @@ while len(people) < 240:
         continue
     used.add(name)
     plain = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
-    slug = plain.lower().replace(" ", "-") + f"-{rnd.randint(100, 999)}"
+    # "pb-sample-" so no link can open a real person's profile.
+    slug = "pb-sample-" + plain.lower().replace(" ", "-") + f"-{rnd.randint(100, 999)}"
     people.append({"name": name, "slug": slug, "url": f"https://www.linkedin.com/in/{slug}"})
 # Two people with the same name, so the agent has to ask which one you mean.
 twin = dict(people[0], slug=people[0]["slug"][:-3] + "777")
@@ -112,7 +113,7 @@ with open(linkedin / "Education.csv", "w", newline="", encoding="utf-8") as f:
     w = csv.writer(f)
     w.writerow(["School Name"])
     w.writerow(["University of Waterloo"])
-me_url = "https://www.linkedin.com/in/sample-user"
+me_url = "https://www.linkedin.com/in/pb-sample-me"
 with open(linkedin / "messages.csv", "w", newline="", encoding="utf-8") as f:
     w = csv.writer(f)
     w.writerow(["CONVERSATION ID", "SENDER PROFILE URL", "RECIPIENT PROFILE URLS"])
