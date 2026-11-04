@@ -51,6 +51,7 @@ claude mcp add personal-brain -- uvx personal-brain mcp
 Try:
 
 - "Who in my network works at Kestrel Graph?"
+- "Who did I talk to about agent memory?"
 - "Who could introduce me to someone at a well-funded startup?"
 - "I met Oskar Mensah at the Graph & RAG Meetup. He's building agent memory." (There are two Oskar Mensahs, so it asks which one.)
 
@@ -75,7 +76,7 @@ Or put `FALKORDB_URL=...` in `~/.personal-brain/.env`.
 | Tool | What it does |
 |---|---|
 | `remember` | Saves who you met, where they work and where you met. Matches the name to people already in the graph. When it is not sure which person you mean, it saves nothing and asks. A new company ends the old job and keeps it in the history. If the person has several current jobs, it asks which ended. The same call twice saves one meeting. Say when you met if it was not today. |
-| `find` | Finds people, companies and events by name, in any script, typos and missing accents included. |
+| `find` | Finds people, companies and events by name, in any script, typos and missing accents included. With `about`, finds people by words in your notes, their topics, skills and headlines, such as "who did I talk to about agent memory?", and says why each one matches. |
 | `ask` | Runs a read-only Cypher query (FalkorDB refuses writes), with a 5 second limit and at most 50 rows. The tool description carries the schema. |
 
 No tool deletes, so text hidden in a LinkedIn headline cannot make your agent delete anything. To delete, run the command yourself. It asks first, unless you add `--yes`:

@@ -97,6 +97,10 @@ def local_database():
         moved = server.call("remember", name="", person_id=saved["person"]["id"], company="Side Works", ended_jobs=[])
         rows = server.call("ask", cypher="MATCH (:Person {name: 'Stdio Sam'})-[:WORKED_AT {current: true}]->(c) RETURN c.name ORDER BY c.name")["rows"]
         check(moved["status"] == "saved" and rows == [["Pipe Works"], ["Side Works"]], "remember takes ended_jobs over stdio")
+        about = server.call("find", about="stdio")
+        check(about["people"][0]["name"] == "Stdio Sam", "find about words over stdio")
+        check("name or about" in server.call("find")["error"], "find with nothing: says what to pass")
+        check(server.call("find", about="no such words here")["found"] == 0, "find about with no match: says so")
         error = server.call("find", name="Sam", label="Planet")["error"]
         check("Person" in error and "Planet" in error, "unknown label: the error names the choices")
     finally:

@@ -10,6 +10,7 @@ a rebuild (load_graph.py) leaves them out.
 import hashlib
 import json
 import os
+import re
 import uuid
 from datetime import date
 from pathlib import Path
@@ -94,6 +95,44 @@ def find(g, text, label=None, limit=10):
         out += [{"label": lab, "id": i, "name": name, "score": round(score, 2),
                  **{k: v for k, v in detail.items() if v not in (None, "", [])}} for i, name, score, detail in rows]
     return sorted(out, key=lambda m: -m["score"])[:limit]
+
+
+# ---------- about ----------
+
+# Where about() looks, best first: your own words come before what LinkedIn says.
+ABOUT = {
+    "note": "MATCH (x:Note)-[:ABOUT]->(p:Person) WHERE {} RETURN p.id, p.name, x.text",
+    "topic": "MATCH (p:Person)-[:INTO]->(t:Topic) WHERE {} RETURN p.id, p.name, t.name",
+    "skill": "MATCH (p:Person)-[:HAS_SKILL|HAS_EXPERIENCE]->(s:Skill) WHERE {} RETURN DISTINCT p.id, p.name, s.name",
+    "headline": "MATCH (p:Person) WHERE {} RETURN p.id, p.name, p.headline",
+}
+ABOUT_FIELD = {"note": "x.text", "topic": "t.name", "skill": "s.name", "headline": "p.headline"}
+ABOUT_LIMIT = 20
+
+
+def has_word_starts(text, words):
+    """Every word is in the text, at the start of a word: "ai" is not in "email". Scripts with no spaces match anywhere."""
+    text = text.lower()
+    return all(re.search(r"(?<!\w)" + re.escape(w), text) if w.isascii() else w in text for w in words)
+
+
+def about(g, text):
+    """People by what they do or what you talked about: words in notes, topics, skills and headlines."""
+    words = text.lower().split()
+    if not words:
+        raise ValueError("Give some words to look for.")
+    people = {}
+    for rank, (source, cypher) in enumerate(ABOUT.items()):
+        where = f"all(w IN $words WHERE toLower({ABOUT_FIELD[source]}) CONTAINS w)"
+        for pid, name, found in g.ro_query(cypher.format(where), {"words": words}, timeout=TIMEOUT_MS).result_set:
+            if has_word_starts(found, words):
+                person = people.setdefault(pid, {"id": pid, "name": name, "rank": rank, "why": []})
+                person["why"].append({"from": source, "text": found})
+    best = sorted(people.values(), key=lambda p: (p["rank"], -len(p["why"]), p["name"]))[:ABOUT_LIMIT]
+    jobs = dict(g.ro_query("MATCH (p:Person) WHERE p.id IN $ids OPTIONAL MATCH (p)-[:WORKED_AT {current: true}]->(c:Company)"
+                           " RETURN p.id, collect(c.name)", {"ids": [p["id"] for p in best]}).result_set)
+    return {"found": len(people), "people": [{"id": p["id"], "name": p["name"], "works_at": jobs.get(p["id"], []), "why": p["why"][:3]}
+                                             for p in best]}
 
 
 # ---------- remember ----------
