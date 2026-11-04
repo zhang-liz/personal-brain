@@ -34,6 +34,8 @@ Everything runs on your laptop. The viewer works offline (three.js is vendored).
 
 `sample_data/` is a made-up network (241 invented people, startups and events) in the same file formats as a real LinkedIn export, so you can try everything before you download your own data.
 
+You need Python 3.10 or newer. Check with `python3 --version`. macOS comes with 3.9: run `brew install python@3.12`, then use `python3.12` in place of `python3`.
+
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp .env.example .env            # paste your FalkorDB Cloud URL into FALKORDB_URL
@@ -64,9 +66,16 @@ Then open Claude Code in this folder. It finds `.mcp.json` and asks to start the
 | `ask` | Runs a read-only Cypher query (FalkorDB refuses writes), with a 5 second limit and at most 50 rows. The tool description carries the schema. |
 | `forget` | Forgets one note and everything it added, one relationship, or one person. A forgotten person stays out of future rebuilds. |
 
-Every write hangs off a `Note` node, so you can trace each fact to the note that made it. Claude Code reads `.mcp.json`. For another client, run `.venv/bin/python spike/mcp_server.py` (stdio) from this folder. `PB_GRAPH` picks the graph (default `network`).
+Every write hangs off a `Note` node, so you can trace each fact to the note that made it. Claude Code reads `.mcp.json`, from this folder or any folder inside it. For another client, give full paths: command `/path/to/personal-brain/.venv/bin/python`, argument `/path/to/personal-brain/spike/mcp_server.py` (stdio). `PB_GRAPH` picks the graph (default `network`). Windows is not tested: `.mcp.json` will not work there, so use full paths, with `.venv\Scripts\python.exe`.
 
-Check it end to end on a throwaway graph: `.venv/bin/python tests/test_memory.py --cloud`.
+If FalkorDB is not running, the server still starts, and each tool says how to start it.
+
+Check it end to end on a throwaway graph, with local FalkorDB running:
+
+```bash
+.venv/bin/python tests/test_memory.py       # the memory tools (add --cloud to use FALKORDB_URL)
+.venv/bin/python tests/test_mcp_server.py   # the server, started the way an agent starts it
+```
 
 ## How it works
 
@@ -173,6 +182,7 @@ To explore in the FalkorDB Browser instead, see `spike/demo_queries.cypher`.
 | `spike/mcp_server.py` | The MCP server for Claude Code and other agents |
 | `.mcp.json` | Tells Claude Code how to start the MCP server |
 | `tests/test_memory.py` | End-to-end check of the memory tools on a throwaway graph |
+| `tests/test_mcp_server.py` | End-to-end check of the MCP server over stdio |
 | `sample_data/` | The made-up sample network |
 | `scripts/make_sample_data.py` | Writes `sample_data/` |
 | `spike/viewer/index.html` | The WebGL viewer (three.js r170, MIT, vendored) |
