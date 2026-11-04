@@ -3,6 +3,10 @@
 Turn your LinkedIn network into a graph you can ask questions, stored in
 [FalkorDB](https://www.falkordb.com/), and fly through it in 3D.
 
+[![Personal Brain demo: a galaxy of 19k nodes answering questions](docs/demo.gif)](https://zhang-liz.github.io/personal-brain/)
+
+**[Try the live demo](https://zhang-liz.github.io/personal-brain/)**. All connections in it are made up, and its companies and events are only example names. To rebuild it, see `scripts/build_demo.py`.
+
 After every event you meet people. Two weeks later you forget who they were,
 what they work on, and who could introduce you to whom. Personal Brain keeps
 that memory as a graph: people, companies, schools, skills, events, topics,

@@ -7,6 +7,7 @@ the node ids it touched, so the viewer can light them up.
 """
 
 import json
+import os
 import sys
 from datetime import date
 from pathlib import Path
@@ -14,7 +15,7 @@ from pathlib import Path
 from falkordb import FalkorDB
 
 PROJECT = Path(__file__).resolve().parent.parent
-OUT = PROJECT / "data" / "viewer" / "stories.json"
+OUT = Path(os.environ.get("PB_VIEWER_DIR", PROJECT / "data" / "viewer")) / "stories.json"
 
 STORIES = [
     {
@@ -86,6 +87,28 @@ WHERE t.name IN ['AI Agents', 'Agent Memory', 'Knowledge Graphs', 'RAG & Search'
 RETURN id(me) AS me, id(p) AS friend, id(c) AS host, id(e) AS event, id(t) AS topic""",
         "pairs": [(0, 1), (1, 2), (2, 3), (3, 4)],
     },
+    {
+        "id": "investors",
+        "title": "Who can warm-intro me to the investors behind OpenAI?",
+        "focus": "MATCH (m:Me) RETURN id(m)",
+        # The investor firm is a Company (its people work there) and an Investor (it funds companies), same id.
+        "cypher": """MATCH (t:Company {name:'OpenAI'})-[:FUNDED_BY]->(i:Investor)
+MATCH (firm:Company {id: i.id})<-[:WORKED_AT {current:true}]-(vc:Person)-[:INTO]->(:Topic {name:'Investing'})
+MATCH (me:Me)-[:CONNECTED]->(friend:Person)-[:KNOWS]-(vc)
+WHERE friend.messages > 0
+RETURN id(me), id(friend), id(vc), id(firm), id(i), id(t)""",
+        "pairs": [(0, 1), (1, 2), (2, 3), (4, 5)],
+    },
+    {
+        "id": "executives",
+        "title": "Which founders and CEOs can I reach through people I talk to?",
+        "focus": "MATCH (m:Me) RETURN id(m)",
+        "cypher": """MATCH (me:Me)-[:CONNECTED]->(friend:Person)-[:KNOWS]-(p:Person)
+WHERE friend.messages > 0 AND p.messages = 0
+  AND ANY(w IN ['founder', 'ceo', 'chief', 'cto', 'coo', 'cfo'] WHERE toLower(p.title) CONTAINS w)
+RETURN id(me), id(friend), id(p)""",
+        "pairs": [(0, 1), (1, 2)],
+    },
 ]
 
 
@@ -99,7 +122,7 @@ def connect():
 
 def main():
     db, where = connect()
-    g = db.select_graph("network")
+    g = db.select_graph(os.environ.get("PB_GRAPH", "network"))
     count, max_id = g.query("MATCH (n) RETURN count(n), max(id(n))").result_set[0]
     if count != max_id + 1:
         sys.exit("node ids are not contiguous; viewer indices would not match FalkorDB ids")
