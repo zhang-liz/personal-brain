@@ -7,6 +7,7 @@ made it, and forgotten with it. People you forget go in data/forgotten.json, so
 a rebuild (load_graph.py) leaves them out.
 """
 
+import hashlib
 import json
 import os
 import uuid
@@ -143,29 +144,88 @@ def resolve(g, name, company, person_id, new_person):
     return None, same
 
 
-def remember(g, name, company="", event="", note="", person_id="", new_person=False, today=None):
-    """Save one meeting: who, where they work, where you met, what you talked about."""
+def meeting_date(on):
+    """The day of the meeting, as YYYY-MM-DD. No date means today."""
+    if not on:
+        return date.today().isoformat()
+    try:
+        day = date.fromisoformat(on)
+    except (TypeError, ValueError):
+        raise ValueError(f"on must be a date like 2026-11-04, not {on}.") from None
+    if day > date.today():
+        raise ValueError(f"{on} is in the future. remember saves meetings that already happened.")
+    return day.isoformat()
+
+
+def repeat_key(company, event, text, day):
+    """Two notes with this key about one person are one meeting saved twice, from an agent's retry."""
+    return hashlib.sha256(json.dumps([fold(company), fold(event), fold(text), day]).encode()).hexdigest()[:16]
+
+
+def saved_before(g, key, person, company, event, note):
+    """The note this same call saved before, as (note id, person id, person name), or None."""
+    ids = [person["id"]]
+    if person["new"] and (company or event or note):
+        # A retry with new_person=true looks for a person it may have just made.
+        ids = [m["id"] for m in find(g, person["name"], "Person", 20) if fold(m["name"]) == fold(person["name"])]
+    rows = g.ro_query("MATCH (n:Note {key: $key})-[:ABOUT]->(p:Person) WHERE p.id IN $ids RETURN n.id, p.id, p.name LIMIT 1",
+                      {"key": key, "ids": ids}).result_set
+    return rows[0] if rows else None
+
+
+def jobs_that_ended(now, ended_jobs, name):
+    """The company ids in ended_jobs. Every one must be a current job."""
+    ended = []
+    for job in ended_jobs:
+        match = [cid for cid, cname in now if cid == norm(job) or fold(cname) == fold(job)]
+        if not match:
+            jobs = ", ".join(cname for _, cname in now) or "none"
+            raise ValueError(f"{job} is not a current job of {name}. Their current jobs: {jobs}.")
+        ended += match
+    return ended
+
+
+def remember(g, name, company="", event="", note="", person_id="", new_person=False, on="", ended_jobs=None):
+    """Save one meeting: who, where they work, where you met, what you talked about, and when."""
     name, company, event, note = (" ".join((x or "").split()) for x in (name, company, event, note))
     if not name and not person_id:
         raise ValueError("Give a name, or a person_id from find.")
+    day = meeting_date(on)
     person, candidates = resolve(g, name, company, person_id, new_person)
     if person is None:
         return {"status": "needs_choice", "candidates": candidates,
                 "message": f"Not sure who {name} is: these people have the same or a similar name. Ask the user, "
                            "then call remember again with person_id for one of them, or new_person=true for someone new."}
 
-    today = today or date.today().isoformat()
+    text = note or " ".join(x for x in [f"Met {person['name']}", company and f"from {company}", event and f"at {event}"] if x)
+    key = repeat_key(company, event, text, day)
+    before = saved_before(g, key, person, company, event, note)
+    if before:
+        return {"status": "already_saved", "note_id": before[0], "person": {"id": before[1], "name": before[2], "new": False},
+                "changes": [], "ms": 0.0, "undo": f"personal-brain forget note {before[0]}"}
+
+    pid = person["id"]
+    cid = (norm(company) or company) if company else ""    # an emoji has no words: use it as it is
+    now = g.ro_query("MATCH (:Person {id: $pid})-[:WORKED_AT {current: true}]->(c:Company) RETURN c.id, c.name",
+                     {"pid": pid}).result_set
+    new_job = bool(company) and cid not in {c for c, _ in now}
+    if new_job and ended_jobs is None and len(now) > 1:
+        jobs = [cname for _, cname in now]
+        return {"status": "needs_jobs", "person": person, "current_jobs": jobs,
+                "message": f"{person['name']} has {len(jobs)} current jobs: {', '.join(jobs)}. Ask the user which ones ended, then call "
+                           "remember again with ended_jobs (an empty list if none ended)."}
+    ended = [c for c, _ in now] if ended_jobs is None else jobs_that_ended(now, ended_jobs, person["name"])
+
     nid = "note-" + uuid.uuid4().hex[:12]
-    pid, changes, ms = person["id"], [], 0.0
+    changes, ms = [], 0.0
 
     def q(cypher, **params):
         nonlocal ms
-        r = g.query(cypher, {"nid": nid, "pid": pid, "today": today, **params})
+        r = g.query(cypher, {"nid": nid, "pid": pid, "day": day, **params})
         ms += r.run_time_ms
         return r.result_set
 
-    text = note or " ".join(x for x in [f"Met {person['name']}", company and f"from {company}", event and f"at {event}"] if x)
-    q("MATCH (me:Me) CREATE (me)-[:WROTE]->(:Note {id: $nid, text: $text, on: $today, source: 'agent'})", text=text)
+    q("MATCH (me:Me) CREATE (me)-[:WROTE]->(:Note {id: $nid, text: $text, on: $day, source: 'agent', key: $key})", text=text, key=key)
     if person["new"]:
         # The note's text stays on the Note, so forgetting the note removes it. The job step below sets the company.
         q("CREATE (:Person {id: $pid, name: $name, search: $search, company: '', headline: '',"
@@ -173,34 +233,33 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
           name=person["name"], search=fold(person["name"]), ec=bool(EVENT_ROLE_RE.search(note)))
         changes.append(f"new person: {person['name']}")
     q("MATCH (me:Me), (n:Note {id: $nid}), (p:Person {id: $pid})"
-      " CREATE (n)-[:ABOUT]->(p), (me)-[:MET {on: $today, note: $nid}]->(p)")
+      " CREATE (n)-[:ABOUT]->(p), (me)-[:MET {on: $day, note: $nid}]->(p)")
 
     if company:
-        cid = norm(company) or company    # an emoji has no words: use it as it is
         q("MERGE (c:Company {id: $cid})"
           " ON CREATE SET c.name = $company, c.search = $search, c.source = 'agent', c.note = $nid",
           cid=cid, company=company, search=fold(company))
-        now = q("MATCH (p:Person {id: $pid})-[w:WORKED_AT {current: true}]->(c:Company) RETURN c.id, c.name")
-        if cid not in {c for c, _ in now}:
-            # A new job: end the old one instead of deleting it, so the history stays.
+        if new_job:
+            # A new job: end the old ones instead of deleting them, so the history stays.
             q("MATCH (p:Person {id: $pid}), (n:Note {id: $nid}) SET n.prev_company = coalesce(p.company, '')")
-            old = q("MATCH (p:Person {id: $pid})-[w:WORKED_AT {current: true}]->(:Company)"
-                    " SET w.current = false, w.ended_on = $today, w.ended_by = $nid RETURN count(w)")
+            q("MATCH (p:Person {id: $pid})-[w:WORKED_AT {current: true}]->(c:Company) WHERE c.id IN $ended"
+              " SET w.current = false, w.ended_on = $day, w.ended_by = $nid", ended=ended)
             q("MATCH (p:Person {id: $pid}), (c:Company {id: $cid})"
-              " CREATE (p)-[:WORKED_AT {current: true, since: $today, source: 'agent', note: $nid}]->(c)"
+              " CREATE (p)-[:WORKED_AT {current: true, since: $day, source: 'agent', note: $nid}]->(c)"
               " SET p.company = $company, p.headline = CASE WHEN p.source = 'agent' THEN $company ELSE p.headline END",
               cid=cid, company=company)
-            changes.append(f"works at {company} now" + (f" (ended: {', '.join(n for _, n in now)})" if old and old[0][0] else ""))
+            names = ", ".join(n for c, n in now if c in ended)
+            changes.append(f"works at {company} now" + (f" (ended: {names})" if names else ""))
 
     if event:
         same = [m for m in find(g, event, "Event", 5) if fold(m["name"]) == fold(event)]
         eid = same[0]["id"] if same else "note-" + (norm(event) or event).replace(" ", "-")
         q("MERGE (e:Event {id: $eid})"
-          " ON CREATE SET e.name = $event, e.search = $search, e.date = $today, e.confirmed = true,"
+          " ON CREATE SET e.name = $event, e.search = $search, e.date = $day, e.confirmed = true,"
           " e.source = 'agent', e.note = $nid"
           " WITH e MATCH (me:Me), (p:Person {id: $pid})"
           " MERGE (me)-[a:ATTENDED]->(e) ON CREATE SET a.note = $nid"
-          " CREATE (p)-[:MET_AT {on: $today, inferred: false, note: $nid}]->(e)",
+          " CREATE (p)-[:MET_AT {on: $day, inferred: false, note: $nid}]->(e)",
           eid=eid, event=event, search=fold(event))
         changes.append(f"met at {same[0]['name'] if same else event}")
 
@@ -217,7 +276,7 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
 def plain(v):
     """FalkorDB values as JSON."""
     if isinstance(v, Node):
-        return {"label": (v.labels or [""])[0], **{k: x for k, x in v.properties.items() if k != "search"}}
+        return {"label": (v.labels or [""])[0], **{k: x for k, x in v.properties.items() if k not in ("search", "key")}}
     if isinstance(v, Edge):
         return {"type": v.relation, **v.properties}
     if isinstance(v, GraphPath):
