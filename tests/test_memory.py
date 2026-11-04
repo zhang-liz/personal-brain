@@ -39,7 +39,44 @@ def main():
         g.delete()
 
 
+def run_names(g):
+    """Names in any script: found again, never merged with someone else's."""
+    check(memory.fold("Tomás Ortega") == "tomas ortega" and memory.norm("Kestrel, Inc.") == "kestrel inc",
+          "Latin names fold as before")
+    for name in ["王伟", "Иван Петров", "김철수", "محمد علي", "प्रिया शर्मा", "山田 太郎"]:
+        r = memory.remember(g, name, new_person=True)
+        found = [m["id"] for m in memory.find(g, name, "Person")]
+        check(r["person"]["id"] in found, f"find {name}")
+        again = memory.remember(g, name, note="met again")
+        check(again["status"] == "saved" and again["person"]["id"] == r["person"]["id"], f"remember {name} again: same person")
+    check(memory.find(g, "Ивон Петров", "Person")[0]["name"] == "Иван Петров", "find a typo in Cyrillic")
+
+    def job_of(name):
+        rows = g.ro_query("MATCH (:Person {name: $n})-[:WORKED_AT {current: true}]->(c) RETURN c.name", {"n": name}).result_set
+        return rows[0][0]
+    memory.remember(g, "Li Na", company="腾讯", new_person=True)
+    memory.remember(g, "Wang Lei", company="三星", new_person=True)
+    check(job_of("Li Na") == "腾讯" and job_of("Wang Lei") == "三星", "two non-Latin companies stay two companies")
+    memory.remember(g, "Rocket Fan", company="🚀", new_person=True)
+    memory.remember(g, "Saucer Fan", company="🛸", new_person=True)
+    check(job_of("Rocket Fan") == "🚀" and job_of("Saucer Fan") == "🛸", "two emoji companies stay two companies")
+
+    def event_of(name):
+        return g.ro_query("MATCH (:Person {name: $n})-[:MET_AT]->(e) RETURN e.name", {"n": name}).result_set[0][0]
+    memory.remember(g, "Event Fan One", event="東京ミートアップ", new_person=True)
+    memory.remember(g, "Event Fan Two", event="大阪イベント", new_person=True)
+    memory.remember(g, "Event Fan Three", event="🎉", new_person=True)
+    check(event_of("Event Fan One") == "東京ミートアップ" and event_of("Event Fan Two") == "大阪イベント"
+          and event_of("Event Fan Three") == "🎉", "different events stay different events")
+
+    # Graphs built before this fix hold an empty search value on non-Latin names.
+    g.query("CREATE (:Person {id: 'old-1', name: '佐藤 花子', search: ''}), (:Person {id: 'old-2', name: '---', search: ''})")
+    memory.setup(g)
+    check([m["id"] for m in memory.find(g, "佐藤", "Person")] == ["old-1"], "setup fills in empty search values")
+
+
 def run(g):
+    run_names(g)
     memory.setup(g)
     memory.setup(g)
     check(True, "setup runs twice")

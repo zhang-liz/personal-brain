@@ -44,13 +44,28 @@ GENERIC_COMPANIES = {"self employed", "freelance", "stealth", "stealth startup",
 
 
 
+def norm(text):
+    """Lowercase words in any script, without punctuation: "Kestrel, Inc." -> "kestrel inc", "三星" -> "三星"."""
+    kept = "".join(c if unicodedata.category(c)[0] in "LMN" else " " for c in (text or "").lower())
+    return " ".join(kept.split())
+
+
+def fold(text):
+    """Name as lowercase words without accents, for search: "Tomás Ortega" -> "tomas ortega".
+
+    Only Latin accents go. Other scripts stay as they are, because their marks can change the name."""
+    plain = (unicodedata.normalize("NFKD", c).encode("ascii", "ignore").decode() or c
+             for c in unicodedata.normalize("NFKC", text or ""))
+    return norm("".join(plain))
+
+
 def load_settings():
     """Your own labels (my_brain.json, see my_brain.example.json). Optional."""
     s = json.loads(SETTINGS.read_text()) if SETTINGS.exists() else {}
     # Names for the days you added many connections ("YYYY-MM-DD": "Event name").
     events = {date.fromisoformat(d): name for d, name in s.get("events", {}).items()}
     # Companies that should never count as well-funded startups (e.g. subsidiaries).
-    skip = {re.sub(r"[^a-z0-9]+", " ", c.lower()).strip() for c in s.get("skip_companies", [])}
+    skip = {norm(c) for c in s.get("skip_companies", [])}
     return events, skip
 
 
@@ -97,15 +112,6 @@ TECH_RE = {t: re.compile(p, re.I) for t, p in TECH.items()}
 # Roles to reach for event collaboration (from current title/headline).
 EVENT_ROLE_RE = re.compile(r"\bevents?\b|community|partnerships?|devrel|developer relations"
                            r"|developer advocat|ecosystem|alliances", re.I)
-
-
-def norm(text):
-    return re.sub(r"[^a-z0-9]+", " ", (text or "").lower()).strip()
-
-
-def fold(text):
-    """Name as plain lowercase ASCII words, for search: "Tomás Ortega" -> "tomas ortega"."""
-    return norm(unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode())
 
 
 def create_search_indexes(graph):
