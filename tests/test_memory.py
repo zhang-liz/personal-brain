@@ -9,6 +9,7 @@ forget against it, then deletes the graph. Never touches your "network" graph.
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -383,6 +384,119 @@ def run_open_client(g):
     check(not left or left[0][0] is None, "an open client can forget after a rebuild")
 
 
+def run_job_changes(g):
+    """A new export shows who moved. The next import keeps the date, and says nothing new."""
+    def row(first, last, company):
+        return f"{first},{last},https://www.linkedin.com/in/{first.lower()}-{last.lower()},,{company},Engineer,01 Jan 2026"
+
+    def edge(pid):
+        return g.ro_query("MATCH (:Person {id: $id})-[w:WORKED_AT {current: true}]->(c) RETURN c.name, w.noticed_on, w.left", {"id": pid}).result_set
+
+    before = [row("Jo", "Mover", "Old Co"), row("Al", "Same", "Same Co"), row("Ty", "Spelled", "Spell Works"),
+              row("Di", "Told", "First Co"), row("Bo", "Stale", "Stale Co")]
+    after = [row("Jo", "Mover", "New Co"), row("Al", "Same", "Same Co"), row("Ty", "Spelled", "Spell Works Inc"),
+             row("Di", "Told", "Told Co"), row("Bo", "Stale", "Stale Co")]
+    r = rebuild("--force", sample=sample_with(*before))
+    check(r.returncode == 0 and "changed jobs" not in r.stdout, "the first load has no job report")
+    memory.setup(g)
+    memory.remember(g, "", person_id="di-told", company="Told Co", note="told me first")
+    memory.remember(g, "", person_id="bo-stale", company="Later Co", note="newer than the export")
+
+    moved = sample_with(*after)
+    r = rebuild(sample=moved)
+    memory.setup(g)
+    check(r.returncode == 0 and "1 person changed jobs" in r.stdout, "the report counts who moved: " + r.stdout[-300:])
+    check("Jo Mover: Old Co -> New Co" in r.stdout, "the report says who moved and where")
+    today = memory.date.today().isoformat()
+    check(edge("jo-mover") == [["New Co", today, "Old Co"]], "the new job has the day it was noticed and the old company")
+    check(edge("al-same")[0][1:] == [None, None], "no change: no mark")
+    check(edge("ty-spelled")[0][1:] == [None, None], "another spelling of the company is not a change")
+    check(all(e[1] is None for e in edge("di-told")), "a move you already saved is not news")
+    check(sorted(e[0] for e in edge("bo-stale")) == ["Later Co"], "an old export does not undo your newer note")
+    check("noticed_on" in memory.SCHEMA, "the schema explains the mark")
+
+    g.query("MATCH (:Person {id: 'jo-mover'})-[w:WORKED_AT {current: true}]->() SET w.noticed_on = '2020-01-01'")
+    r = rebuild(sample=moved)
+    memory.setup(g)
+    check(r.returncode == 0 and "changed jobs" not in r.stdout, "the next import has no new report")
+    check(edge("jo-mover") == [["New Co", "2020-01-01", "Old Co"]], "the next import keeps the first day it was noticed")
+    check(rebuild("--force").returncode == 0, "back to the plain sample")
+    memory.setup(g)
+
+
+def run_last_message(g):
+    """The date of the last message, so "who did I lose touch with" has a real answer. Never the text."""
+    rows = g.ro_query("MATCH (p:Person) WHERE p.messages > 0 RETURN p.id, p.last_message").result_set
+    check(rows and all(re.fullmatch(r"\d{4}-\d\d-\d\d", d or "") for _, d in rows), "people you messaged have a last message date")
+    check(g.ro_query("MATCH (p:Person) WHERE p.messages = 0 AND p.last_message IS NOT NULL RETURN count(p)").result_set[0][0] == 0,
+          "people you never messaged have none")
+    name = g.ro_query("MATCH (p:Person {id: $id}) RETURN p.name", {"id": rows[0][0]}).result_set[0][0]
+    check(memory.find(g, name, "Person")[0]["last_message"] == rows[0][1], "find shows it")
+    check("last_message" in memory.SCHEMA, "the schema explains it")
+
+    sample = sample_with()
+    file = sample / "linkedin/messages.csv"
+    lines = [line.rsplit(",", 1)[0] for line in file.read_text(encoding="utf-8").splitlines() if line.startswith(("CONVERSATION", "dm-"))]
+    file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    r = rebuild("--force", sample=sample)
+    memory.setup(g)
+    check(r.returncode == 0, "an export without dates still loads: " + r.stderr[-200:])
+    check(g.ro_query("MATCH (p:Person) WHERE p.last_message IS NOT NULL RETURN count(p)").result_set[0][0] == 0, "no dates, no last message")
+    check(rebuild("--force").returncode == 0, "back to the plain sample")
+    memory.setup(g)
+
+
+def run_follow_ups(g):
+    """Things you said you would do. They stay open until done, and survive a rebuild."""
+    def state(fid):
+        rows = g.ro_query("MATCH (f:FollowUp {id: $id}) RETURN f.open, f.text, f.due", {"id": fid}).result_set
+        return rows[0] if rows else None
+
+    def open_ones(name):
+        return memory.find(g, name, "Person")[0].get("follow_ups", [])
+
+    first = memory.remember(g, "Fran Follow", note="Talked about graphs", follow_up="Send the deck", due="2030-01-15", new_person=True)
+    pid, fid = first["person"]["id"], first["follow_up_id"]
+    check(state(fid) == [True, "Send the deck", "2030-01-15"], "a follow-up is saved, open, with its due date")
+    check(open_ones("Fran Follow") == [{"id": fid, "text": "Send the deck", "due": "2030-01-15"}], "find shows open follow-ups")
+    met = "MATCH (:Me)-[r:MET]->(:Person {id: $id}) RETURN count(r)"
+    only = memory.remember(g, "", person_id=pid, follow_up="Call back")
+    check(only["status"] == "saved" and g.ro_query(met, {"id": pid}).result_set[0][0] == 1, "a follow-up alone is not a meeting")
+    check(memory.remember(g, "", person_id=pid, follow_up="Call back")["status"] == "already_saved", "the same follow-up twice saves once")
+    check(len(open_ones("Fran Follow")) == 2, "two open follow-ups")
+
+    someone_else = memory.remember(g, "Not Fran", note="someone else", new_person=True)["person"]["id"]
+    for wrong, what in [({"person_id": pid, "follow_up": "x", "due": "soon"}, "a bad due date"),
+                        ({"person_id": pid, "note": "x", "due": "2030-01-01"}, "a due date with no follow-up"),
+                        ({"follow_up_done": "followup-none"}, "an unknown follow-up"),
+                        ({"person_id": someone_else, "follow_up_done": fid}, "another person's follow-up")]:
+        try:
+            memory.remember(g, "", **wrong)
+            check(False, f"{what} is refused")
+        except ValueError as e:
+            check(str(e), f"{what} is refused")
+
+    done = memory.remember(g, "", follow_up_done=fid)
+    check(done["status"] == "saved" and state(fid)[0] is False, "done closes it, with only its id")
+    check([f["id"] for f in open_ones("Fran Follow")] == [only["follow_up_id"]], "find hides what is done")
+    check(g.ro_query(met, {"id": pid}).result_set[0][0] == 1, "done is not a meeting")
+    check(memory.remember(g, "", follow_up_done=fid)["status"] == "already_saved", "done twice saves once")
+    memory.forget(g, "note", done["note_id"])
+    check(state(fid)[0] is True, "forget the done note: it is open again")
+    done = memory.remember(g, "", follow_up_done=fid)
+
+    check(rebuild().returncode == 0, "rebuild")
+    memory.setup(g)
+    check(state(fid)[0] is False and state(only["follow_up_id"])[0] is True, "a rebuild keeps follow-ups and what is done")
+    check(open_ones("Fran Follow")[0]["text"] == "Call back", "the follow-up is still linked to the person")
+    check("FollowUp" in memory.SCHEMA, "the schema explains follow-ups")
+
+    memory.forget(g, "note", only["note_id"])
+    check(state(only["follow_up_id"]) is None, "forget the note: its follow-up goes")
+    memory.forget(g, "person", pid)
+    check(state(fid) is None, "forget the person: their follow-ups go")
+
+
 def run_company_names(g):
     """The same company said another way is the same job."""
     def jobs(pid):
@@ -597,6 +711,9 @@ def run(g):
     run_open_client(g)    # first: only the first rebuild of a new graph renumbers the fields
     run_merge_on_import(g)
     run_rebuild(g)
+    run_job_changes(g)
+    run_last_message(g)
+    run_follow_ups(g)
     run_company_names(g)
     run_event_names(g)
     run_coworkers(g)

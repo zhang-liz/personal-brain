@@ -23,7 +23,7 @@ def main():
 
     check(run("--version").returncode == 0, "--version works")
     check("forget" in run("--help").stdout, "--help lists the commands")
-    for command in (["notes"], ["forget", "note", "note-x", "--yes"]):
+    for command in (["notes"], ["followups"], ["forget", "note", "note-x", "--yes"]):
         r = run(*command)
         check(r.returncode != 0 and "FalkorDB" in r.stderr and "Traceback" not in r.stderr, f"{command[0]} with no database: a clear error")
 
