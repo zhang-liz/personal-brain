@@ -24,6 +24,7 @@ What the viewer does:
   - Who should I invite to my podcast on agents and memory?
   - Which upcoming agent events can I speak at through people I know?
 - **Remember**: type "Met Maya from Supabase at AI Engineer Summit, runs developer events" and it is written to FalkorDB live and appears in the galaxy.
+- **Live view**: keep `personal-brain view` open while your agent works. Each person it looks up or saves lights up in the galaxy.
 - **Demo mode**: the whole show hands-free (press `D`).
 - **Agent memory (MCP)**: Claude Code, or any MCP client, can find people, ask the graph, and remember who you met. It cannot delete anything: only you can, with `personal-brain forget`.
 
@@ -196,6 +197,7 @@ Then, in another terminal, run the tests. They use throwaway graphs:
 | `src/personal_brain/notes_backup.py` | Keeps your notes through a rebuild |
 | `src/personal_brain/job_changes.py` | Reports who changed jobs on each load |
 | `src/personal_brain/followups.py` | The `personal-brain followups` command |
+| `src/personal_brain/activity.py` | Tells the viewer what your agent just did |
 | `src/personal_brain/companies.py` | Decides if two company names are the same company |
 | `.mcp.json` | Tells Claude Code how to start the MCP server in a clone |
 | `tests/` | End-to-end checks of the memory tools, the MCP server and the built package, on throwaway graphs |
