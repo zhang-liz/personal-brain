@@ -240,6 +240,35 @@ def main():
                 check(post("/api/remember", "Met Viewer Vic from Good Co", Origin="http://127.0.0.1:8765") == 200,
                       "the viewer's Remember box handles a repeat")
 
+                # The viewer shows what the agent does, from another process, as it happens.
+                def activity(since):
+                    return json.loads(urllib.request.urlopen(f"http://127.0.0.1:8765/api/activity?since={since}").read())
+
+                start = activity(-1)
+                check(start["events"] == [], "the first activity request gets the position, not old events")
+                check(get_with("/api/activity?since=abc") == 400, "the viewer API answers 400 to a bad activity position")
+                check(get_with("/api/activity?since=0", Host="evil.example:8765") == 403 and get_with("/api/activity?since=0", Origin="https://evil.example") == 403,
+                      "another website cannot read what your agent does")
+                check("/api/activity" in page, "the page reads the activity")
+                live = Server([brain, "mcp"], user, env)
+                saved_live = live.call("remember", name="Live Lena", company="Live Co", note="the private words", new_person=True)
+                live.call("find", name="Live Lena")
+                live.call("ask", cypher="MATCH (p:Person {name: 'Live Lena'}) RETURN p.name")
+                live.call("ask", cypher="MATCH (p:Person {name: 'Live Lena'}) RETURN p")
+                live.call("ask", cypher="MATCH (p:Person {name: 'Live Lena'}) RETURN p.nope(")
+                live.stop()
+                seen = activity(start["seq"])
+                check([e["tool"] for e in seen["events"]] == ["remember", "find", "ask", "ask"], "each tool call is one event, and an error is none: " + str(seen)[:300])
+                check(all(e["names"] == ["Live Lena"] for e in seen["events"]), "each event names who it touched")
+                check(seen["events"][0]["saved"] is True and seen["events"][1]["saved"] is False, "an event says if it saved something")
+                check("private words" not in json.dumps(seen), "the activity holds names, not the text of notes")
+                check(activity(seen["seq"])["events"] == [], "an event shows once")
+                fresh = json.loads(urllib.request.urlopen("http://127.0.0.1:8765/api/delta?since=99999999").read())
+                check("Live Lena" in [n["name"] for n in fresh["nodes"]], "new data reaches the viewer even when a forgotten node's id comes back")
+                check(any(e["type"] == "MET" for e in fresh["edges"]), "new links between old nodes reach the viewer")
+                r = run("forget", "note", saved_live["note_id"], "--yes")
+                check(r.returncode == 0 and activity(-1)["seq"] == 0 and not (home / "data/activity.json").exists(), "forget also clears names from the activity")
+
                 # Back at an old company with two current jobs: only an agent can say which jobs ended.
                 server = Server([brain, "mcp"], user, env)
                 pid = server.call("remember", name="Busy Bea", company="Old Co", new_person=True)["person"]["id"]

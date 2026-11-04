@@ -14,7 +14,7 @@ import sys
 
 import redis
 
-from personal_brain import memory
+from personal_brain import activity, memory
 from personal_brain.paths import HOME
 
 USAGE = ("Use: personal-brain forget person <name or id> [--yes], personal-brain forget note <id> [--yes], "
@@ -58,6 +58,7 @@ def refresh_viewer(where):
 
 
 def main():
+    activity.clear()    # before anything else: the names may be of who you are forgetting
     args = sys.argv[1:]
     yes = "--yes" in args
     args = [a for a in args if a != "--yes"]

@@ -36,7 +36,7 @@ SAMPLE_DIR = Path(os.environ.get("PB_SAMPLE_DIR", PACKAGE / "sample_data"))
 ENRICHED = (SAMPLE_DIR if SAMPLE else HOME / "data") / "enriched"
 SETTINGS = (SAMPLE_DIR if SAMPLE else HOME) / "my_brain.json"
 FORGOTTEN = HOME / "data" / "forgotten.json"   # people you told the agent to forget
-GRAPH = sys.argv[sys.argv.index("--graph") + 1] if "--graph" in sys.argv else "network"
+GRAPH = sys.argv[sys.argv.index("--graph") + 1] if "--graph" in sys.argv else os.environ.get("PB_GRAPH", "network")
 NOW = date.today().year + date.today().month / 12
 csv.field_size_limit(10**9)
 

@@ -15,7 +15,7 @@ import redis
 from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
-from personal_brain import __version__, memory
+from personal_brain import __version__, activity, memory
 
 GRAPH = None
 NO_DATABASE = ("Cannot reach FalkorDB ({}). Tell the user to start it with "
@@ -31,7 +31,9 @@ def answer(fn, *args):
             graph, _ = memory.connect()
             memory.setup(graph)
             GRAPH = graph
-        return fn(GRAPH, *args)
+        result = fn(GRAPH, *args)
+        activity.log(fn.__name__, result)
+        return result
     except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError) as e:
         GRAPH = None
         return {"error": NO_DATABASE.format(e)}
