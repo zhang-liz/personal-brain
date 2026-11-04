@@ -1,6 +1,7 @@
 """Agent memory on the Personal Brain graph: remember, find, ask and forget.
 
-Shared by the MCP server (mcp_server.py) and the viewer's live API (server.py).
+Shared by the MCP server (mcp_server.py), the viewer's live API (server.py) and
+the forget command (forget.py). The agent has no tool that deletes.
 Every write hangs off a Note node, so each fact can be traced to the note that
 made it, and forgotten with it. People you forget go in data/forgotten.json, so
 a rebuild (load_graph.py) leaves them out.
@@ -207,17 +208,18 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
         q("MATCH (p:Person {id: $pid}), (t:Topic {id: $t}) MERGE (p)-[i:INTO]->(t) ON CREATE SET i.note = $nid", t=topic)
         changes.append(f"into {topic}")
 
-    return {"status": "saved", "note_id": nid, "person": person, "changes": changes, "ms": round(ms, 2)}
+    return {"status": "saved", "note_id": nid, "person": person, "changes": changes, "ms": round(ms, 2),
+            "undo": f"personal-brain forget note {nid}"}
 
 
 # ---------- ask ----------
 
 def plain(v):
-    """FalkorDB values as JSON. Relationships keep their rel_id, so forget(what='fact') can delete one."""
+    """FalkorDB values as JSON."""
     if isinstance(v, Node):
         return {"label": (v.labels or [""])[0], **{k: x for k, x in v.properties.items() if k != "search"}}
     if isinstance(v, Edge):
-        return {"type": v.relation, "rel_id": v.id, **v.properties}
+        return {"type": v.relation, **v.properties}
     if isinstance(v, GraphPath):
         return {"nodes": [plain(n) for n in v.nodes()], "edges": [plain(e) for e in v.edges()]}
     if isinstance(v, list):
@@ -285,18 +287,6 @@ def rebuild_from_notes(g, pid):
             {"pid": pid, "ec": any(EVENT_ROLE_RE.search(text) for _, text in notes)})
 
 
-def forget_fact(g, rel_id):
-    """Delete one relationship, by the rel_id that ask() returns."""
-    if not str(rel_id).isdigit():
-        raise ValueError(f"{rel_id} is not a rel_id. Use the rel_id number that ask returns for a relationship.")
-    rows = g.query("MATCH (a)-[r]->(b) WHERE id(r) = $id WITH a, r, b, type(r) AS t, a.name AS an, b.name AS bn"
-                   " DELETE r RETURN an, t, bn", {"id": int(rel_id)}).result_set
-    if not rows:
-        raise ValueError(f"No relationship with rel_id {rel_id}.")
-    a, t, b = rows[0]
-    return {"forgot": "fact", "fact": f"{a} {t} {b}"}
-
-
 def forget_person(g, pid):
     """Delete a person, every note about them, and keep them out of future rebuilds."""
     rows = g.ro_query("MATCH (p:Person {id: $id}) RETURN p.name", {"id": pid}).result_set
@@ -315,11 +305,9 @@ def forget_person(g, pid):
 def forget(g, what, id):
     if what == "note":
         return forget_note(g, id)
-    if what == "fact":
-        return forget_fact(g, id)
     if what == "person":
         return forget_person(g, id)
-    raise ValueError("what must be 'note', 'fact' or 'person'.")
+    raise ValueError("what must be 'note' or 'person'.")
 
 
 def forget_all_notes(g):
