@@ -75,8 +75,79 @@ def run_names(g):
     check([m["id"] for m in memory.find(g, "佐藤", "Person")] == ["old-1"], "setup fills in empty search values")
 
 
+def run_forget(g):
+    """Forget leaves nothing behind, and does not take away what another note still says."""
+    def one(cypher, **params):
+        rows = g.ro_query(cypher, params).result_set
+        return rows[0][0] if rows else None
+
+    # A new person with two notes: the text of a forgotten note stays nowhere.
+    a = memory.remember(g, "Forget Fiona", company="Fiona Co", note="private text one", new_person=True)
+    pid = a["person"]["id"]
+    b = memory.remember(g, "", person_id=pid, note="private text two")
+    memory.forget(g, "note", a["note_id"])
+    props = g.ro_query("MATCH (p:Person {id: $id}) RETURN p", {"id": pid}).result_set[0][0].properties
+    check("private text one" not in str(props), "forgotten note's text stays nowhere on the person")
+    check(not props.get("company"), "forgotten note's company stays nowhere on the person")
+    memory.forget(g, "note", b["note_id"])
+    check(one("MATCH (p:Person {id: $id}) RETURN count(p)", id=pid) == 0, "last note forgotten: new person gone")
+    check(one("MATCH (c:Company {name: 'Fiona Co'}) RETURN count(c)") == 0, "last note forgotten: new company gone")
+
+    # Three job changes: forget them in any order and the current job stays right.
+    def jobs(person):
+        rows = g.ro_query("MATCH (p:Person {id: $id}) OPTIONAL MATCH (p)-[:WORKED_AT {current: true}]->(c)"
+                          " RETURN p.company, collect(c.name)", {"id": person}).result_set
+        return rows[0] if rows else None
+    j1 = memory.remember(g, "Job Hopper", company="Alpha Labs", new_person=True)
+    pid = j1["person"]["id"]
+    j2 = memory.remember(g, "", person_id=pid, company="Beta Labs")
+    j3 = memory.remember(g, "", person_id=pid, company="Gamma Labs")
+    memory.forget(g, "note", j2["note_id"])
+    check(jobs(pid) == ["Gamma Labs", ["Gamma Labs"]], "forget a middle job: newest job stays the only current one")
+    memory.forget(g, "note", j3["note_id"])
+    check(jobs(pid) == ["Alpha Labs", ["Alpha Labs"]], "forget the newest job: the job before it comes back")
+    j4 = memory.remember(g, "", person_id=pid, company="Delta Labs")
+    memory.forget(g, "note", j1["note_id"])
+    check(jobs(pid) == ["Delta Labs", ["Delta Labs"]], "forget the first job: newest job stays")
+    memory.forget(g, "note", j4["note_id"])
+    check(jobs(pid) is None, "all job notes forgotten: new person gone")
+
+    # Someone imported with a company but no job history gets that company back.
+    g.query("CREATE (:Person {id: 'imported-1', name: 'Imported Ines', search: 'imported ines', company: 'Old Co', headline: 'CEO'})")
+    n = memory.remember(g, "", person_id="imported-1", company="New Co", note="private text three")
+    memory.forget(g, "note", n["note_id"])
+    check(jobs("imported-1") == ["Old Co", []], "imported person: company comes back")
+    check(one("MATCH (p:Person {id: 'imported-1'}) RETURN p.headline") == "CEO", "imported person: headline stays")
+
+    # Two people met at one new event: it stays until the last note about it goes.
+    e1 = memory.remember(g, "Meetup Mia", event="Shared Meetup", new_person=True)
+    e2 = memory.remember(g, "Meetup Max", event="Shared Meetup", new_person=True)
+    attended = "MATCH (:Me)-[a:ATTENDED]->(:Event {name: 'Shared Meetup'}) RETURN count(a)"
+    memory.forget(g, "note", e1["note_id"])
+    check(one(attended) == 1, "first note forgotten: you still attended the shared event")
+    memory.forget(g, "note", e2["note_id"])
+    check(one("MATCH (e:Event {name: 'Shared Meetup'}) RETURN count(e)") == 0, "last note forgotten: shared event gone")
+
+    # Two notes say the same topic: it stays until the last one goes.
+    t1 = memory.remember(g, "Topic Tess", note="runs developer events, into agent memory", new_person=True)
+    pid = t1["person"]["id"]
+    t2 = memory.remember(g, "", person_id=pid, note="more about agent memory")
+    topic = "MATCH (:Person {id: $id})-[i:INTO]->(:Topic {name: 'Agent Memory'}) RETURN count(i)"
+    memory.forget(g, "note", t1["note_id"])
+    check(one(topic, id=pid) == 1, "first note forgotten: topic from the second note stays")
+    check(one("MATCH (p:Person {id: $id}) RETURN p.event_contact", id=pid) is False, "forgotten note no longer marks an event contact")
+    memory.forget(g, "note", t2["note_id"])
+
+    # A person from the import stays when every note about them goes.
+    uid = g.ro_query("MATCH (:Me)-[:CONNECTED]->(p:Person) RETURN p.id LIMIT 1").result_set[0][0]
+    n = memory.remember(g, "", person_id=uid, note="short note")
+    memory.forget(g, "note", n["note_id"])
+    check(one("MATCH (p:Person {id: $id}) RETURN count(p)", id=uid) == 1, "imported person stays after their notes go")
+
+
 def run(g):
     run_names(g)
+    run_forget(g)
     memory.setup(g)
     memory.setup(g)
     check(True, "setup runs twice")
