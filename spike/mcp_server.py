@@ -1,37 +1,51 @@
 """MCP server: your Personal Brain graph as your agent's memory.
 
 Four tools on one FalkorDB graph: remember, find, ask, forget. Claude Code
-starts it from .mcp.json in the project folder. Other MCP clients:
+starts it from .mcp.json in the project folder. Other MCP clients (stdio), with
+full paths:
 
-    command: .venv/bin/python   args: spike/mcp_server.py   (stdio)
+    command: /path/to/personal-brain/.venv/bin/python
+    args:    /path/to/personal-brain/spike/mcp_server.py
 
 FALKORDB_URL (environment or .env) = FalkorDB Cloud; empty = local FalkorDB on
 localhost:6379. PB_GRAPH picks the graph (default "network"). The tools only
-ever touch that one graph.
+ever touch that one graph. The server starts without a database: each tool
+connects when it runs, and says what to do if it cannot.
 """
 
 import sys
 from pathlib import Path
 
+import redis
 from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import memory  # noqa: E402
 
-GRAPH, SOURCE = memory.connect()
-memory.setup(GRAPH)
+GRAPH = None
+NO_DATABASE = ("Cannot reach FalkorDB ({}). Tell the user to start it with "
+               "`docker run -p 6379:6379 -p 3000:3000 -it --rm falkordb/falkordb:latest`, "
+               "or to put their FalkorDB Cloud URL in FALKORDB_URL in the .env file. Then try again.")
 
 
 def answer(fn, *args):
     """Errors go back to the agent as text it can act on (a Cypher typo, an unknown id), not a bare failure."""
+    global GRAPH
     try:
+        if GRAPH is None:
+            graph, _ = memory.connect()
+            memory.setup(graph)
+            GRAPH = graph
         return fn(GRAPH, *args)
+    except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError) as e:
+        GRAPH = None
+        return {"error": NO_DATABASE.format(e)}
     except Exception as e:
         return {"error": str(e)}
 
 
-server = MCPServer("personal-brain", instructions=(
+server = MCPServer("personal-brain", version="0.1.0", instructions=(
     "The user's professional network and meeting notes, as a graph in FalkorDB. "
     "Use find to look up a person, company or event by name. Use ask for questions that follow links "
     "(who knows whom, who works where, who I met at which event). Use remember when the user tells you "

@@ -83,6 +83,8 @@ FIND = {
 
 def find(g, text, label=None, limit=10):
     """People, companies and events whose name matches, best first."""
+    if label and label not in FIND:
+        raise ValueError(f"Unknown label {label}. Use Person, Company or Event.")
     query = search_query(text)
     if not query:
         return []
@@ -288,6 +290,8 @@ def rebuild_from_notes(g, pid):
 
 def forget_fact(g, rel_id):
     """Delete one relationship, by the rel_id that ask() returns."""
+    if not str(rel_id).isdigit():
+        raise ValueError(f"{rel_id} is not a rel_id. Use the rel_id number that ask returns for a relationship.")
     rows = g.query("MATCH (a)-[r]->(b) WHERE id(r) = $id WITH a, r, b, type(r) AS t, a.name AS an, b.name AS bn"
                    " DELETE r RETURN an, t, bn", {"id": int(rel_id)}).result_set
     if not rows:
