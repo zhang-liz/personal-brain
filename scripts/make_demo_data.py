@@ -43,7 +43,7 @@ Schneider Fischer Weber Meyer Wagner Becker Schulz Hoffmann Koch Richter Klein W
 Krause Larsen Hansen Nielsen Jensen Lindqvist Bergstrom Nystrom Johansson Eriksson Rossi Ferrari Bianchi Romano
 Colombo Ricci Moreau Laurent Lefebvre Dubois Bernard Girard Fournier Janssen Visser Bakker Novak Kowalski Nowak
 Horvat Popescu""".split()
-OTHER_FIRST = """Priya Arjun Ananya Ravi Mei Wei Jin Hana Kenji Yuki Amara Kwame Thabo Ifeoma Emeka Noor Omar Farah
+OTHER_FIRST = """Sana Arjun Ananya Ravi Mei Wei Jin Hana Kenji Yuki Amara Kwame Thabo Ifeoma Emeka Noor Omar Farah
 Yusuf Leila Mateo Lucia Diego Valentina Camila Rafael Joon Minji""".split()
 OTHER_LAST = """Patel Sharma Iyer Nair Chen Wang Liu Zhang Kim Park Tanaka Sato Okafor Mensah Adeyemi Mwangi Haddad
 Khan Rahman Yilmaz Garcia Rodriguez Silva Morales Nguyen Tran""".split()

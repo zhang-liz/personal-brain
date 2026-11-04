@@ -46,7 +46,7 @@ GENERIC_COMPANIES = {"self employed", "freelance", "stealth", "stealth startup",
 
 
 def norm(text):
-    """Lowercase words in any script, without punctuation: "Acme, Inc." -> "acme inc", "三星" -> "三星"."""
+    """Lowercase words in any script, without punctuation: "Kestrel, Inc." -> "kestrel inc", "三星" -> "三星"."""
     kept = "".join(c if unicodedata.category(c)[0] in "LMN" else " " for c in (text or "").lower())
     return " ".join(kept.split())
 

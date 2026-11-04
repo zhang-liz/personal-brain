@@ -1,10 +1,10 @@
-"""Is this the same company? People say "Acme", "Acme Inc." and "Acme Labs" for one job."""
+"""Is this the same company? People say "Kestrel", "Kestrel Inc." and "Kestrel Labs" for one job."""
 
 LEGAL_WORDS = {"inc", "incorporated", "llc", "ltd", "limited", "corp", "corporation", "co", "company", "gmbh", "plc", "sa", "ag", "bv", "pty"}
 
 
 def core(company_id):
-    """A normalized company name without the legal words at its end: "acme labs inc" -> "acme labs"."""
+    """A normalized company name without the legal words at its end: "kestrel labs inc" -> "kestrel labs"."""
     words = company_id.split()
     while len(words) > 1 and words[-1] in LEGAL_WORDS:
         words.pop()
