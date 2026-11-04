@@ -41,7 +41,7 @@ def answer(fn, *args):
 
 server = MCPServer("personal-brain", version=__version__, instructions=(
     "The user's professional network and meeting notes, as a graph in FalkorDB. "
-    "Use find to look up a person, company or event by name. Use ask for questions that follow links "
+    "Use find to look up a person, company or event by name, or people by what they do or what you talked about. Use ask for questions that follow links "
     "(who knows whom, who works where, who I met at which event). Use remember when the user tells you "
     "about someone they met. You cannot delete anything. If the user wants something forgotten, tell them to run "
     "`personal-brain forget person <name>` or the undo command that remember returned."))
@@ -65,11 +65,18 @@ def remember(name: str, company: str = "", event: str = "", note: str = "",
 
 
 @server.tool(annotations=ToolAnnotations(read_only_hint=True))
-def find(name: str, label: str = "") -> list | dict:
-    """Find people, companies or events by name. Typos and missing accents are fine.
+def find(name: str = "", label: str = "", about: str = "") -> list | dict:
+    """Find people, companies or events by name, or people by what they do. Pass name or about.
 
+    name: typos and missing accents are fine.
+    about: words such as "agent memory". It looks in your notes, topics, skills and headlines, needs every word,
+    and shows up to 20 people, each with why they match. Your notes come first.
     label: "Person", "Company" or "Event" to search only one kind. Returns ids for ask and remember,
     plus where each person works now, so you can tell two people with the same name apart."""
+    if about:
+        return answer(memory.about, about)
+    if not name.strip():
+        return {"error": "Pass name or about."}
     # An empty list reaches the agent as an empty reply, so say it in words.
     return answer(memory.find, name, label or None) or {
         "found": 0, "message": "No match. Try part of the name, or use remember to add them as a new person."}
