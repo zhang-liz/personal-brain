@@ -23,7 +23,6 @@ What the viewer does:
   - Which startups host AI events, and who do I know there?
   - Who should I invite to my podcast on agents and memory?
   - Which upcoming agent events can I speak at through people I know?
-- **Shortlists**: ranked tables (and CSVs) of co-hosts & sponsors, podcast guests, upcoming events to speak at, and organizers you know. Every row says why it ranks there.
 - **Remember**: type "Met Maya from Supabase at AI Engineer Summit, runs developer events" and it is written to FalkorDB live and appears in the galaxy.
 - **Demo mode**: the whole show hands-free (press `D`).
 - **Agent memory (MCP)**: Claude Code, or any MCP client, can find people, ask the graph, and remember who you met. It cannot delete anything: only you can, with `personal-brain forget`.
@@ -95,7 +94,7 @@ Every write hangs off a `Note` node, so you can trace each fact to the note that
 LinkedIn data export ──┐
                        ├─> load_graph.py ──> FalkorDB ──┬─> mcp_server.py ──> your agent
 data/enriched/ ────────┘   (graph "network")            ├─> export_graph.py ──> layout_graph.py ──> viewer
-(optional)                                              ├─> export_stories.py, export_shortlists.py ──> viewer
+(optional)                                              ├─> export_stories.py ──> viewer
                                                         └─> server.py (live "Remember" API) ──> viewer
 ```
 
@@ -112,7 +111,6 @@ data/enriched/ ────────┘   (graph "network")            ├─
      - Who hosts each upcoming event: a host who is your connection (LinkedIn match), or a company where you know people (host is the company, a host works there, or the title names it, like "Notion x Clover").
 4. **export_graph.py + layout_graph.py** export the graph to JSON and compute a 2D layout (igraph DrL). In 3D, each node type sits on its own layer.
 5. **export_stories.py** runs the "Ask the graph" Cypher queries on FalkorDB and saves the answers and timings for the viewer.
-6. **export_shortlists.py** ranks co-hosts, podcast guests and places to speak with a simple score you can read and change.
 
 ### Graph schema
 
@@ -132,7 +130,7 @@ Unzip it into `~/.personal-brain` (the folder name contains `LinkedInDataExport`
 
 **Or start empty.** Skip the import. The MCP server creates you in an empty graph, and the graph grows as you tell your agent who you met.
 
-Optional: copy [`my_brain.example.json`](my_brain.example.json) to `~/.personal-brain/my_brain.json` to name your events and list competitors.
+Optional: copy [`my_brain.example.json`](my_brain.example.json) to `~/.personal-brain/my_brain.json` to name your events and skip companies.
 
 **2. Build the graph and the viewer data.** Add `--cloud` to both when you use FalkorDB Cloud:
 
@@ -147,7 +145,7 @@ uvx personal-brain export
 uvx personal-brain view
 ```
 
-Open http://127.0.0.1:8765 (shortlists: http://127.0.0.1:8765/shortlists.html). Keys: `2` / `3` switch views, `T` time-lapse, `B` big bang, `D` demo, `Esc` reset.
+Open http://127.0.0.1:8765. Keys: `2` / `3` switch views, `T` time-lapse, `B` big bang, `D` demo, `Esc` reset.
 
 To explore in the FalkorDB Browser instead, see `docs/demo_queries.cypher`.
 
@@ -173,7 +171,7 @@ Then, in another terminal, run the tests. They use throwaway graphs:
 
 - Your data stays in `~/.personal-brain`, outside the package. Only you can open that folder. In a clone, the export, `data/`, `.env` and `my_brain.json` are in `.gitignore`. Never commit them.
 - Message text is never read into the graph, only how many messages you exchanged with each person.
-- `data/viewer/graph.json` and the shortlists in your data folder hold real names. Share screenshots, not those files.
+- `data/viewer/graph.json` in your data folder holds real names. Share screenshots, not that file.
 - The local server listens on `127.0.0.1` only and serves only `data/viewer/`.
 
 ## Files
@@ -186,8 +184,6 @@ Then, in another terminal, run the tests. They use throwaway graphs:
 | `src/personal_brain/export_graph.py` | Exports every node and edge to `data/viewer/graph.json` |
 | `src/personal_brain/layout_graph.py` | Precomputes the layout |
 | `src/personal_brain/export_stories.py` | The "Ask the graph" questions and their Cypher |
-| `src/personal_brain/export_shortlists.py` | Ranked shortlists: co-hosts & sponsors, podcast guests, places to speak |
-| `src/personal_brain/viewer/shortlists.html` | The shortlists page (filter, download CSV) |
 | `src/personal_brain/server.py` | Serves the viewer and the live Remember API, to the viewer's own page only |
 | `src/personal_brain/memory.py` | The memory itself: remember, find, ask, forget (used by the MCP server, the viewer and the forget command) |
 | `src/personal_brain/mcp_server.py` | The MCP server for Claude Code and other agents |

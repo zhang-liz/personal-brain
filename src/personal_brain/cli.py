@@ -47,7 +47,6 @@ def main():
             run("export_graph", *args)
             run("layout_graph", "--dims=2")
             run("export_stories", *args)
-            run("export_shortlists", *args)
     elif command in ("", "-h", "--help", "help"):
         print(USAGE)
     else:
