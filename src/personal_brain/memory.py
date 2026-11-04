@@ -74,11 +74,11 @@ def setup(g):
 # ---------- find ----------
 
 def search_query(text):
-    """Full-text query: every word must match, as a prefix or with 1 typo ("jnas" finds Sana)."""
+    """Full-text query: every word must match, as a prefix or with 1 typo ("jnas" finds Jonas)."""
     return " ".join(f"({w}*|%{w}%)" if len(w) >= 4 else f"{w}*" for w in fold(text).split())
 
 
-# What to show next to each match, so the agent (and you) can tell two Sanas apart.
+# What to show next to each match, so the agent (and you) can tell two Jonases apart.
 FIND = {
     "Person": "OPTIONAL MATCH (node)-[:WORKED_AT {current: true}]->(c:Company) "
               "WITH node, score, collect(c.name) AS now "
