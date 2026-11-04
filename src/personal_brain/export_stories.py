@@ -121,10 +121,6 @@ def connect():
 def main():
     db, where = connect()
     g = db.select_graph(os.environ.get("PB_GRAPH", "network"))
-    count, max_id = g.query("MATCH (n) RETURN count(n), max(id(n))").result_set[0]
-    if count != max_id + 1:
-        sys.exit("node ids are not contiguous; viewer indices would not match FalkorDB ids")
-
     out = []
     for story in STORIES:
         result = g.query(story["cypher"])

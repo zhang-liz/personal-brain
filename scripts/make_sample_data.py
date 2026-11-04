@@ -116,16 +116,21 @@ with open(linkedin / "Education.csv", "w", newline="", encoding="utf-8") as f:
 me_url = "https://www.linkedin.com/in/pb-sample-me"
 with open(linkedin / "messages.csv", "w", newline="", encoding="utf-8") as f:
     w = csv.writer(f)
-    w.writerow(["CONVERSATION ID", "SENDER PROFILE URL", "RECIPIENT PROFILE URLS"])
+    dates = random.Random(11)    # its own generator, so the rest of the sample stays the same
+
+    def sent():
+        return f"{dates.randint(2023, 2026)}-{dates.randint(1, 12):02d}-{dates.randint(1, 28):02d} 12:00:00 UTC"
+
+    w.writerow(["CONVERSATION ID", "SENDER PROFILE URL", "RECIPIENT PROFILE URLS", "DATE"])
     for i, p in enumerate(rnd.sample(people, 60)):
         for _ in range(rnd.randint(1, 12)):
-            w.writerow([f"dm-{i}", rnd.choice([me_url, p["url"]]), me_url if rnd.random() < 0.5 else p["url"]])
+            w.writerow([f"dm-{i}", rnd.choice([me_url, p["url"]]), me_url if rnd.random() < 0.5 else p["url"], sent()])
     # A few group chats: everyone in one knows each other.
     for g in range(4):
         members = rnd.sample(people, 4)
-        w.writerow([f"group-{g}", me_url, ",".join(m["url"] for m in members)])
+        w.writerow([f"group-{g}", me_url, ",".join(m["url"] for m in members), sent()])
         for m in members:
-            w.writerow([f"group-{g}", m["url"], ",".join([me_url] + [x["url"] for x in members if x is not m])])
+            w.writerow([f"group-{g}", m["url"], ",".join([me_url] + [x["url"] for x in members if x is not m]), sent()])
 
 
 def span(start_year, years):

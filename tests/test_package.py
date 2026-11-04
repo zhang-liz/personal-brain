@@ -102,6 +102,15 @@ def main():
             r = run("notes")
             check(r.returncode == 0 and all(w in r.stdout for w in [listed["note_id"], "Listed Lee", "words to review"]),
                   "notes lists each note with its id, person and text")
+            todo = server.call("remember", name="", person_id=listed["person"]["id"], follow_up="Send the deck", due="2030-01-15")
+            later = server.call("remember", name="", person_id=listed["person"]["id"], follow_up="No date yet")
+            r = run("followups")
+            check(r.returncode == 0 and all(w in r.stdout for w in ["2030-01-15", todo["follow_up_id"], "Listed Lee", "Send the deck"]),
+                  "followups lists what is open, with the date, id, person and text")
+            check(r.stdout.index("Send the deck") < r.stdout.index("No date yet"), "followups puts dated ones first")
+            server.call("remember", name="", follow_up_done=todo["follow_up_id"])
+            check("Send the deck" not in run("followups").stdout, "followups hides what is done")
+            run("forget", "note", later["note_id"], "--yes")
             older = server.call("remember", name="Older Olu", note="older words", on="2020-01-01", new_person=True)
             r = run("notes")
             check(r.stdout.index("Listed Lee") < r.stdout.index("Older Olu"), "notes puts the newest first")
@@ -127,6 +136,14 @@ def main():
             check(r.returncode == 0, "export works when the system default is not UTF-8" + (": " + r.stderr[-200:] if r.returncode else ""))
             r = run("forget", "person", non_latin["person"]["id"], "--yes", **ascii_only)
             check(r.returncode == 0, "forget works with non-Latin text when the system default is not UTF-8" + (": " + r.stderr[-200:] if r.returncode else ""))
+            older = server.call("remember", name="Gap Gale", note="made first", new_person=True)
+            newer = server.call("remember", name="Stay Sato", note="made after", new_person=True)
+            place = server.call("ask", cypher="MATCH (p:Person {id: $id}) RETURN id(p)", params={"id": newer["person"]["id"]})["rows"][0][0]
+            r = run("forget", "person", older["person"]["id"], "--yes")
+            check(r.returncode == 0, "forget an older person, then the viewer's files update" + (": " + r.stderr[-200:] if r.returncode else ""))
+            r = run("export")
+            viewer = json.loads((home / "data/viewer/graph.json").read_text(encoding="utf-8"))
+            check(r.returncode == 0 and viewer["nodes"][place][1] == "Stay Sato", "after a forget, a viewer place still matches the id in the graph")
             server.stop()
 
             r = run("export")

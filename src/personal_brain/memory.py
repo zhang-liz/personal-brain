@@ -26,12 +26,14 @@ TIMEOUT_MS = 5000    # longest an ask() query may run
 
 FIELDS = ("title", "location", "email")    # facts remember can set or correct on a person
 
-SCHEMA = """Nodes: Me (you), Person, Company, School, Skill, Topic, Event, Investor, City, Note.
-Every node has id and name. Person: headline, title, company, location, email, connected_on, messages.
+SCHEMA = """Nodes: Me (you), Person, Company, School, Skill, Topic, Event, Investor, City, Note, FollowUp.
+Every node but Note and FollowUp has id and name. Person: headline, title, company, location, email, connected_on, messages,
+last_message (the day of your last LinkedIn message, for "who did I lose touch with": sort it, and people with none never wrote).
 Company: well_funded, funding, employees. Event: date, upcoming, summary, url.
 Edges:
 (Me)-[:CONNECTED {on}]->(Person)
-(Person)-[:WORKED_AT {title, start, end, current}]->(Company)   end is only on past jobs
+(Person)-[:WORKED_AT {title, start, end, current, noticed_on, left}]->(Company)   end is only on past jobs.
+For "who changed jobs": noticed_on is the day a new LinkedIn export first showed this job, and left names what they left.
 (Person)-[:STUDIED_AT]->(School), (Person)-[:HAS_SKILL]->(Skill), (Person)-[:HAS_EXPERIENCE {years}]->(Skill)
 (Person)-[:INTO]->(Topic), (Person)-[:LIVES_IN]->(City)
 (Person)-[:KNOWS {via, place}]-(Person)   inferred: coworkers or classmates at the same time
@@ -40,6 +42,7 @@ Edges:
 (Event {upcoming: true})-[:HOSTED_BY {via}]->(Person or Company), (Event)-[:ABOUT]->(Topic), (Event)-[:HELD_IN]->(City)
 (Me)-[:WROTE]->(Note {text, on})-[:ABOUT]->(Person), (Me)-[:MET {on, note}]->(Person)
 People you met may be MET but not CONNECTED: for "my network", match both.
+(FollowUp {text, open, on, due, done_on})-[:FOR]->(Person)   things the user said they would do. open is false when done.
 Topics: AI Agents, Agent Memory, Knowledge Graphs, RAG & Search, LLMs & GenAI, Developer Relations,
 Community & Events, Partnerships, Investing, Founder, Podcast & Media."""
 
@@ -79,8 +82,10 @@ def search_query(text):
 FIND = {
     "Person": "OPTIONAL MATCH (node)-[:WORKED_AT {current: true}]->(c:Company) "
               "WITH node, score, collect(c.name) AS now "
+              "OPTIONAL MATCH (f:FollowUp {open: true})-[:FOR]->(node) "
+              "WITH node, score, now, collect(CASE WHEN f IS NULL THEN NULL ELSE {id: f.id, text: f.text, due: f.due} END) AS todo "
               "RETURN node.id, node.name, score, {headline: node.headline, works_at: now, connected_on: node.connected_on,"
-              " title: node.title, location: node.location, email: node.email}",
+              " title: node.title, location: node.location, email: node.email, last_message: node.last_message, follow_ups: todo}",
     "Company": "OPTIONAL MATCH (node)<-[:WORKED_AT {current: true}]-(p:Person) "
                "WITH node, score, count(p) AS people "
                "RETURN node.id, node.name, score, {people_you_know_there: people, funding: node.funding}",
@@ -276,15 +281,34 @@ def undo_fields(g, nid, note, pid):
             " w.title_note = p.title_note", {"nid": nid})
 
 
+def due_date(due, follow_up):
+    if not due:
+        return None
+    if not follow_up:
+        raise ValueError("due is the date of a follow_up, and you gave no follow_up.")
+    try:
+        return date.fromisoformat(due).isoformat()
+    except (TypeError, ValueError):
+        raise ValueError(f"due must be a date like 2026-11-04, not {due}.") from None
+
+
 def remember(g, name, company="", event="", note="", person_id="", new_person=False, on="", ended_jobs=None,
-             title="", location="", email=""):
+             title="", location="", email="", follow_up="", due="", follow_up_done=""):
     """Save one meeting (who, where they work, where you met, what you talked about, when), or correct a fact about someone."""
-    name, company, event, note, title, location, email = (
-        " ".join((x or "").split()) for x in (name, company, event, note, title, location, email))
+    name, company, event, note, title, location, email, follow_up = (
+        " ".join((x or "").split()) for x in (name, company, event, note, title, location, email, follow_up))
+    due = due_date(due, follow_up)
+    done = None
+    if follow_up_done:
+        rows = g.ro_query("MATCH (f:FollowUp {id: $id})-[:FOR]->(p:Person) RETURN p.id, f.text, f.open", {"id": follow_up_done}).result_set
+        if not rows or (person_id and rows[0][0] != person_id):
+            raise ValueError(f"No follow-up {follow_up_done} for this person. Use find to see their open follow-ups.")
+        done = rows[0]
+        person_id = done[0]
     if not name and not person_id:
         raise ValueError("Give a name, or a person_id from find.")
     fields = {f: v for f, v in zip(FIELDS, (title, location, email)) if v}
-    met = bool(note or event or company or not fields)    # only title, city or email: a correction, not a meeting
+    met = bool(note or event or company) or not (fields or follow_up or done)    # a correction or a to-do is not a meeting
     day = meeting_date(on)
     # A save that stopped halfway, when the connection dropped, must not confuse this one.
     for (half_saved,) in g.ro_query("MATCH (n:Note {saving: true}) RETURN n.id").result_set:
@@ -298,13 +322,17 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
     if met:
         text = note or " ".join(x for x in [f"Met {person['name']}", company and f"from {company}", event and f"at {event}"] if x)
     else:
-        text = "Updated " + ", ".join(f"{f}: {v}" for f, v in fields.items())
-    key = repeat_key(company, event, text, day, fields)
-    before = saved_before(g, key, person, company, event, note or fields)
+        text = ". ".join(x for x in ["Updated " + ", ".join(f"{f}: {v}" for f, v in fields.items()) if fields else "",
+                                     f"Follow up: {follow_up}" if follow_up else "", f"Done: {done[1]}" if done else ""] if x)
+    extra = {**fields, "follow_up": follow_up, "due": due or "", "done": follow_up_done}
+    key = repeat_key(company, event, text, day, {k: v for k, v in extra.items() if v})
+    before = saved_before(g, key, person, company, event, note or fields or follow_up)
     if before:
         return {"status": "already_saved", "note_id": before[0], "person": {"id": before[1], "name": before[2], "new": False},
                 "changes": [], "ms": 0.0, "undo": f"personal-brain forget note {before[0]}"}
 
+    if done and not done[2]:
+        raise ValueError(f"The follow-up {follow_up_done} is already done.")
     pid = person["id"]
     now = g.ro_query("MATCH (:Person {id: $pid})-[:WORKED_AT {current: true}]->(c:Company) RETURN c.id, c.name",
                      {"pid": pid}).result_set
@@ -325,6 +353,7 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
     ended = [c for c, _ in now] if ended_jobs is None else jobs_that_ended(now, ended_jobs, person["name"])
 
     nid = "note-" + uuid.uuid4().hex[:12]
+    fid = "followup-" + uuid.uuid4().hex[:12] if follow_up else ""
     changes, ms = [], 0.0
 
     def q(cypher, **params):
@@ -387,6 +416,14 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
         set_fields(q, fields, cid, now)
         changes.extend(f"{f}: {v}" for f, v in fields.items())
 
+        if follow_up:
+            q("MATCH (p:Person {id: $pid}) CREATE (f:FollowUp {id: $fid, text: $todo, open: true, on: $day, source: 'agent', note: $nid})"
+              "-[:FOR {note: $nid}]->(p) SET f.due = $due", fid=fid, todo=follow_up, due=due)
+            changes.append(f"follow up: {follow_up}" + (f" by {due}" if due else ""))
+        if done:
+            q("MATCH (f:FollowUp {id: $fid}) SET f.open = false, f.done_on = $day, f.done_by = $nid", fid=follow_up_done)
+            changes.append(f"done: {done[1]}")
+
         # Last step: only a full save has a key, so a retry after a failure saves again.
         q("MATCH (n:Note {id: $nid}) SET n.key = $key, n.saving = NULL", key=key)
 
@@ -400,7 +437,7 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
         raise
 
     return {"status": "saved", "note_id": nid, "person": person, "changes": changes, "ms": round(ms, 2),
-            "undo": f"personal-brain forget note {nid}"}
+            **({"follow_up_id": fid} if fid else {}), "undo": f"personal-brain forget note {nid}"}
 
 
 # ---------- ask ----------
@@ -466,6 +503,7 @@ def forget_note(g, nid):
     g.query("MATCH (:Me)-[a:ATTENDED {note: $nid}]->(:Event)<-[m:MET_AT]-() WHERE coalesce(m.note, '') <> $nid"
             " WITH a, collect(m.note)[0] AS other SET a.note = other", params)
 
+    g.query("MATCH (f:FollowUp {done_by: $nid}) SET f.open = true, f.done_on = NULL, f.done_by = NULL", params)
     counts["facts"] = int(g.query("MATCH ()-[r {note: $nid}]->() DELETE r", params).relationships_deleted)
     for pid in people:
         undo_fields(g, nid, note, pid)
