@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -114,9 +115,49 @@ def main():
                         time.sleep(0.5)
                 graph = json.loads(urllib.request.urlopen("http://127.0.0.1:8765/graph.json").read())
                 check("three" in page and graph["nodes"], "view serves the page and the graph")
+                check('id="forget"' not in page and "/api/forget" not in page, "the page has no delete button")
+
+                def post(path, text, **headers):
+                    request = urllib.request.Request("http://127.0.0.1:8765" + path, json.dumps({"text": text}).encode(), headers)
+                    try:
+                        return urllib.request.urlopen(request).status
+                    except urllib.error.HTTPError as e:
+                        return e.code
+
+                def get_with(path, **headers):
+                    try:
+                        return urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:8765" + path, headers=headers)).status
+                    except urllib.error.HTTPError as e:
+                        return e.code
+
+                check(post("/api/forget", "") == 404, "the viewer API cannot delete")
+                check(post("/api/remember", "Met Evil Eve from Bad Co", Origin="https://evil.example") == 403,
+                      "the viewer API refuses a request from another website")
+                check(post("/api/remember", "Met Sandbox Sid from Bad Co", Origin="null") == 403,
+                      "the viewer API refuses a request with no real origin")
+                check(post("/api/remember", "Met Rebound Rae from Bad Co", Host="evil.example:8765") == 403,
+                      "the viewer API refuses another host name")
+                check(get_with("/api/delta?since=0", Host="evil.example:8765") == 403 and get_with("/graph.json", Host="evil.example:8765") == 403,
+                      "the viewer does not show your data to another host name")
+                check(post("/api/remember", "Met Viewer Vic from Good Co", Origin="http://127.0.0.1:8765") == 200,
+                      "the viewer API takes a request from its own page")
+                check(post("/api/remember", "Met Local Lou from Good Co", Origin="http://localhost:8765", Host="localhost:8765") == 200,
+                      "the viewer API takes a request from localhost")
             finally:
                 view.terminate()
                 view.wait(timeout=10)
+
+            server = Server([brain, "mcp"], user, env)
+            refused = [n for n in ["Evil Eve", "Sandbox Sid", "Rebound Rae"] if isinstance(server.call("find", name=n, label="Person"), list)]
+            check(not refused, f"refused requests saved nothing {refused}")
+            check(isinstance(server.call("find", name="Viewer Vic", label="Person"), list), "the page's request was saved")
+            notes = "MATCH (n:Note) RETURN count(n)"
+            check(run("forget", "all-notes").returncode != 0 and server.call("ask", cypher=notes)["rows"][0][0] > 0,
+                  "forget all-notes: no answer keeps them")
+            r = run("forget", "all-notes", "--yes")
+            check(r.returncode == 0 and server.call("ask", cypher=notes)["rows"] == [[0]], "forget all-notes clears notes for the next demo")
+            check(run("forget", "all-notes", "extra").returncode != 0, "forget all-notes takes no target")
+            server.stop()
         finally:
             sys.path.insert(0, str(PROJECT / "src"))
             from falkordb import FalkorDB
