@@ -96,6 +96,18 @@ def main():
                   "forget person: same name twice lists ids and deletes nobody")
             check(run("forget", "person", "Nobody Here", "--yes").returncode != 0, "forget person: unknown name fails")
 
+            listed = server.call("remember", name="Listed Lee", company="Lee Co", note="words to review", new_person=True)
+            r = run("notes")
+            check(r.returncode == 0 and all(w in r.stdout for w in [listed["note_id"], "Listed Lee", "words to review"]),
+                  "notes lists each note with its id, person and text")
+            older = server.call("remember", name="Older Olu", note="older words", on="2020-01-01", new_person=True)
+            r = run("notes")
+            check(r.stdout.index("Listed Lee") < r.stdout.index("Older Olu"), "notes puts the newest first")
+            run("forget", "note", older["note_id"], "--yes")
+            r = run("notes", "--limit", "1")
+            check(r.returncode == 0 and "1 of" in r.stdout and r.stdout.count("note-") == 1, "notes --limit shows fewer and says so")
+            check(run("forget", "note", listed["note_id"], "--yes").returncode == 0 and listed["note_id"] not in run("notes").stdout,
+                  "a note from the list can be deleted")
             note = server.call("remember", name="", person_id=first["person"]["id"], note="undo this text")
             r = run(*note["undo"].split()[1:], "--yes")
             rows = server.call("ask", cypher="MATCH (n:Note {id: $id}) RETURN n.id", params={"id": note["note_id"]})["rows"]
