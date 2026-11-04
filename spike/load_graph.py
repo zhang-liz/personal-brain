@@ -31,8 +31,9 @@ from falkordb import FalkorDB
 
 PROJECT = Path(__file__).resolve().parent.parent
 SAMPLE = "--sample" in sys.argv
-ENRICHED = PROJECT / ("sample_data" if SAMPLE else "data") / "enriched"
-SETTINGS = PROJECT / ("sample_data" if SAMPLE else ".") / "my_brain.json"
+SAMPLE_DIR = Path(os.environ.get("PB_SAMPLE_DIR", PROJECT / "sample_data"))
+ENRICHED = (SAMPLE_DIR if SAMPLE else PROJECT / "data") / "enriched"
+SETTINGS = (SAMPLE_DIR if SAMPLE else PROJECT) / "my_brain.json"
 FORGOTTEN = PROJECT / "data" / "forgotten.json"   # people you told the agent to forget
 GRAPH = sys.argv[sys.argv.index("--graph") + 1] if "--graph" in sys.argv else "network"
 NOW = date.today().year + date.today().month / 12
@@ -125,7 +126,7 @@ def create_search_indexes(graph):
 def find_export():
     """The unzipped LinkedIn data export in the project folder (or $LINKEDIN_EXPORT, or the sample)."""
     if SAMPLE:
-        return PROJECT / "sample_data" / "linkedin"
+        return SAMPLE_DIR / "linkedin"
     if os.environ.get("LINKEDIN_EXPORT"):
         return Path(os.environ["LINKEDIN_EXPORT"])
     found = sorted(p for p in PROJECT.glob("*LinkedInDataExport*") if (p / "Connections.csv").exists())

@@ -9,6 +9,7 @@ shortlists.html) and one CSV per list in data/viewer/shortlists/.
 
 import csv
 import json
+import os
 import re
 import sys
 from collections import defaultdict
@@ -18,7 +19,7 @@ from pathlib import Path
 from falkordb import FalkorDB
 
 PROJECT = Path(__file__).resolve().parent.parent
-OUT = PROJECT / "data" / "viewer"
+OUT = Path(os.environ.get("PB_VIEWER_DIR", PROJECT / "data" / "viewer"))
 SETTINGS = PROJECT / "my_brain.json"
 TOP = 60
 
@@ -59,7 +60,7 @@ def competitors():
 
 def main():
     db, where = connect()
-    g = db.select_graph("network")
+    g = db.select_graph(os.environ.get("PB_GRAPH", "network"))
     q = lambda cypher, **params: g.query(cypher, params).result_set
     today = date.today()
     since = f"{today.year - 1}-01-01"

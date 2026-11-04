@@ -8,6 +8,7 @@ and writes data/viewer/graph.json (gitignored: it has real names).
 """
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -15,7 +16,7 @@ from pathlib import Path
 from falkordb import FalkorDB
 
 PROJECT = Path(__file__).resolve().parent.parent
-OUT = PROJECT / "data" / "viewer" / "graph.json"
+OUT = Path(os.environ.get("PB_VIEWER_DIR", PROJECT / "data" / "viewer")) / "graph.json"
 PAGE = 500  # node ids per page
 CAP = 10000  # FalkorDB Cloud result-set cap
 
@@ -30,17 +31,24 @@ def connect():
 
 def main():
     db, where = connect()
-    g = db.select_graph("network")
+    g = db.select_graph(os.environ.get("PB_GRAPH", "network"))
     t0 = time.time()
     max_id = g.query("MATCH (n) RETURN max(id(n))").result_set[0][0]
 
     def edge_page(lo, hi):
         rows = g.query("MATCH (a)-[r]->(b) WHERE id(a) >= $lo AND id(a) < $hi"
-                       " RETURN id(a), id(b), type(r)", {"lo": lo, "hi": hi}).result_set
+                       " RETURN id(a), id(b), type(r) ORDER BY id(r) LIMIT $cap",
+                       {"lo": lo, "hi": hi, "cap": CAP}).result_set
         if len(rows) < CAP:
             return rows
         if hi - lo == 1:
-            sys.exit(f"node {lo} has {CAP}+ outgoing edges; export cannot page it")
+            # One node with more edges than a result can hold (you, with 10k+ connections).
+            skip = 0
+            while len(rows) % CAP == 0 and len(rows) == skip + CAP:
+                skip += CAP
+                rows += g.query("MATCH (a)-[r]->(b) WHERE id(a) = $lo RETURN id(a), id(b), type(r)"
+                                " ORDER BY id(r) SKIP $skip LIMIT $cap", {"lo": lo, "skip": skip, "cap": CAP}).result_set
+            return rows
         mid = (lo + hi) // 2
         return edge_page(lo, mid) + edge_page(mid, hi)
 
