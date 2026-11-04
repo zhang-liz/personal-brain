@@ -58,8 +58,6 @@
   .chip.off { opacity: 0.38; }
   #remember { margin-top: 12px; display: flex; gap: 6px; }
   #remember .field { font-size: 13px; }
-  #remember button { flex: none; width: 38px; border-radius: 10px; border: 1px solid var(--panel-border);
-    background: rgba(255,255,255,0.04); color: var(--text-secondary); font: inherit; cursor: pointer; }
   #rememberHint { margin-top: 6px; font-size: 11px; color: var(--text-muted); }
   #stories { top: 16px; right: 16px; padding: 12px; width: 320px; }
   #stories h2, #card h2 { margin: 0 0 8px; font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.7px; }
@@ -144,7 +142,6 @@
   <form id="remember">
     <input id="rememberText" class="field" placeholder="Remember: Met Maya from Supabase at AI Summit, runs events"
            autocomplete="off" aria-label="Remember someone you met">
-    <button type="button" id="forget" title="Delete everything added with Remember">↺</button>
   </form>
   <div id="rememberHint">Writes to FalkorDB live</div>
   <div id="layers"></div>
@@ -780,14 +777,6 @@ rememberForm.addEventListener("submit", async (ev) => {
     rememberHint.textContent = "Start the demo server: personal-brain view";
   }
 });
-document.getElementById("forget").onclick = async () => {
-  try {
-    const res = await fetch("/api/forget", { method: "POST" });
-    const data = await res.json();
-    rememberHint.textContent = `Deleted ${data.deleted} remembered nodes. Reloading…`;
-    setTimeout(() => location.reload(), 700);
-  } catch { rememberHint.textContent = "Start the demo server: personal-brain view"; }
-};
 
 // ---------- search ----------
 const q = document.getElementById("q"), results = document.getElementById("results");

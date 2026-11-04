@@ -16,7 +16,8 @@ Commands:
   view                     open the viewer's server on http://127.0.0.1:8765
   forget person <name or id> [--yes]
   forget note <id> [--yes]
-                           delete a person or a note. Only you can do this, not your agent
+  forget all-notes [--yes]
+                           delete a person, a note or every note. Only you can do this, not your agent
 
 Your data folder: {HOME}
 """
