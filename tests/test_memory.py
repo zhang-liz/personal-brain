@@ -144,9 +144,98 @@ def run_forget(g):
     check(one("MATCH (p:Person {id: $id}) RETURN count(p)", id=uid) == 1, "imported person stays after their notes go")
 
 
+def refused(fn, *args, **kwargs):
+    """The message when fn refuses with a ValueError, else ""."""
+    try:
+        fn(*args, **kwargs)
+    except ValueError as e:
+        return str(e)
+    return ""
+
+
+def run_dates(g):
+    """A meeting keeps the day it happened, not the day you said so."""
+    r = memory.remember(g, "Dated Dana", company="Date Co", event="Past Meetup", note="old chat", on="2026-01-15", new_person=True)
+    pid, nid = r["person"]["id"], r["note_id"]
+    row = g.ro_query("MATCH (me:Me)-[m:MET]->(p:Person {id: $id})-[a:MET_AT]->(e:Event), (n:Note {id: $nid})"
+                     " RETURN n.on, m.on, a.on, e.date", {"id": pid, "nid": nid}).result_set[0]
+    check(row == ["2026-01-15"] * 4, "meeting date reaches the note, the links and a new event")
+    r = memory.remember(g, "", person_id=pid, company="Later Co", on="2026-02-01")
+    row = g.ro_query("MATCH (:Person {id: $id})-[w:WORKED_AT]->(c:Company) RETURN c.name, w.since, w.ended_on ORDER BY c.name",
+                     {"id": pid}).result_set
+    check(row == [["Date Co", "2026-01-15", "2026-02-01"], ["Later Co", "2026-02-01", None]], "job dates use the meeting date")
+    r = memory.remember(g, "", person_id=pid, note="no date given")
+    on = g.ro_query("MATCH (n:Note {id: $id}) RETURN n.on", {"id": r["note_id"]}).result_set[0][0]
+    check(on == memory.date.today().isoformat(), "no date: today")
+    notes = g.ro_query("MATCH (n:Note) RETURN count(n)").result_set[0][0]
+    check("last week" in refused(memory.remember, g, "", person_id=pid, note="x", on="last week"), "a date in words is refused")
+    check("future" in refused(memory.remember, g, "", person_id=pid, note="x", on="2999-01-01"), "a future date is refused")
+    check(g.ro_query("MATCH (n:Note) RETURN count(n)").result_set[0][0] == notes, "a refused date saves nothing")
+
+
+def run_repeats(g):
+    """An agent that retries a call must not save the meeting twice."""
+    def count(cypher, **params):
+        return g.ro_query(cypher, params).result_set[0][0]
+
+    call = dict(company="Repeat Co", event="Repeat Meetup", note="same words", on="2026-03-01")
+    first = memory.remember(g, "Repeat Rae", new_person=True, **call)
+    pid = first["person"]["id"]
+    again = memory.remember(g, "Repeat Rae", **call)
+    check(again["status"] == "already_saved" and again["note_id"] == first["note_id"] and again["person"]["id"] == pid,
+          "same call again: says it is saved, gives the same note")
+    check("undo" in again and again["changes"] == [], "same call again: gives the undo command, changes nothing")
+    retry = memory.remember(g, "Repeat Rae", new_person=True, **call)
+    check(retry["status"] == "already_saved" and retry["person"]["id"] == pid, "same call with new_person: no second person")
+    check(count("MATCH (:Person {id: $id})<-[:ABOUT]-(n:Note) RETURN count(n)", id=pid) == 1, "repeats: one note")
+    check(count("MATCH (:Me)-[r:MET]->(:Person {id: $id}) RETURN count(r)", id=pid) == 1, "repeats: one MET link")
+    check(count("MATCH (:Person {id: $id})-[r:MET_AT]->() RETURN count(r)", id=pid) == 1, "repeats: one MET_AT link")
+    other_day = memory.remember(g, "Repeat Rae", **{**call, "on": "2026-03-02"})
+    check(other_day["status"] == "saved", "same words on another day: a new meeting")
+    other_words = memory.remember(g, "Repeat Rae", **{**call, "note": "new words"})
+    check(other_words["status"] == "saved", "other words on the same day: a new note")
+    memory.forget(g, "note", other_words["note_id"])
+    check(memory.remember(g, "Repeat Rae", **{**call, "note": "new words"})["status"] == "saved", "a forgotten note can be saved again")
+    a = memory.remember(g, "Blank Bo", new_person=True)
+    b = memory.remember(g, "Blank Bo", new_person=True)
+    check(a["person"]["id"] != b["person"]["id"], "new_person with nothing else: two people, as asked")
+    note = g.ro_query("MATCH (n:Note {id: $id}) RETURN n", {"id": first["note_id"]}).result_set[0][0]
+    check("key" not in memory.plain(note), "ask does not show the repeat key")
+
+
+def run_jobs(g):
+    """A person can hold several jobs. A new one ends only the ones you say ended."""
+    g.query("CREATE (p:Person {id: 'two-jobs', name: 'Tess Twojobs', search: 'tess twojobs', company: 'Main Job', headline: 'x'})"
+            " CREATE (p)-[:WORKED_AT {current: true}]->(:Company {id: 'main job', name: 'Main Job', search: 'main job'})"
+            " CREATE (p)-[:WORKED_AT {current: true}]->(:Company {id: 'side job', name: 'Side Job', search: 'side job'})")
+
+    def now():
+        return sorted(c for (c,) in g.ro_query("MATCH (:Person {id: 'two-jobs'})-[:WORKED_AT {current: true}]->(c) RETURN c.name").result_set)
+
+    notes = g.ro_query("MATCH (n:Note) RETURN count(n)").result_set[0][0]
+    r = memory.remember(g, "", person_id="two-jobs", company="New Job", note="moved")
+    check(r["status"] == "needs_jobs" and sorted(r["current_jobs"]) == ["Main Job", "Side Job"], "two current jobs: asks which ended")
+    check(now() == ["Main Job", "Side Job"] and g.ro_query("MATCH (n:Note) RETURN count(n)").result_set[0][0] == notes,
+          "two current jobs: asking saves nothing")
+    message = refused(memory.remember, g, "", person_id="two-jobs", company="New Job", ended_jobs=["Nope"])
+    check("Nope" in message and "Main Job" in message, "a job they do not hold is refused, and the error lists their jobs")
+    r = memory.remember(g, "", person_id="two-jobs", company="New Job", note="left main", ended_jobs=["main job"])
+    check(r["status"] == "saved" and now() == ["New Job", "Side Job"], "ended one job: the other stays current")
+    check("works at New Job now (ended: Main Job)" in r["changes"], "the reply names only the job that ended")
+    memory.forget(g, "note", r["note_id"])
+    check(now() == ["Main Job", "Side Job"], "forget: the ended job comes back")
+    r = memory.remember(g, "", person_id="two-jobs", company="Extra Job", note="added a job", ended_jobs=[])
+    check(r["status"] == "saved" and now() == ["Extra Job", "Main Job", "Side Job"], "empty list: keeps every job")
+    check("works at Extra Job now" in r["changes"], "the reply names no ended job when none ended")
+    memory.forget(g, "note", r["note_id"])
+
+
 def run(g):
     run_names(g)
     run_forget(g)
+    run_dates(g)
+    run_repeats(g)
+    run_jobs(g)
     memory.setup(g)
     memory.setup(g)
     check(True, "setup runs twice")

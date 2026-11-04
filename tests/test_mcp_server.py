@@ -89,6 +89,14 @@ def local_database():
         rows = server.call("ask", cypher="MATCH (p:Person {name: $n}) RETURN p.company", params={"n": "Stdio Sam"})["rows"]
         check(rows == [["Pipe Works"]], "ask over stdio")
         check(saved.get("undo") == f"personal-brain forget note {saved['note_id']}", "remember says how to undo")
+        dated = server.call("remember", name="Stdio Sam", note="older chat", on="2026-01-15")
+        rows = server.call("ask", cypher="MATCH (n:Note {id: $id}) RETURN n.on", params={"id": dated["note_id"]})["rows"]
+        check(rows == [["2026-01-15"]], "remember takes a date over stdio")
+        check(server.call("remember", name="Stdio Sam", note="older chat", on="2026-01-15")["status"] == "already_saved",
+              "a repeat over stdio saves nothing")
+        moved = server.call("remember", name="", person_id=saved["person"]["id"], company="Side Works", ended_jobs=[])
+        rows = server.call("ask", cypher="MATCH (:Person {name: 'Stdio Sam'})-[:WORKED_AT {current: true}]->(c) RETURN c.name ORDER BY c.name")["rows"]
+        check(moved["status"] == "saved" and rows == [["Pipe Works"], ["Side Works"]], "remember takes ended_jobs over stdio")
         error = server.call("find", name="Sam", label="Planet")["error"]
         check("Person" in error and "Planet" in error, "unknown label: the error names the choices")
     finally:
