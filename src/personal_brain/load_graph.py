@@ -5,9 +5,9 @@ company data in data/enriched/ when you have them. Real names, but no message
 text (only message counts). A connections-only export works too.
 Your own event labels and company skip list live in my_brain.json (not in git).
 
-    .venv/bin/python src/load_graph.py --cloud            # FALKORDB_URL from .env
-    .venv/bin/python src/load_graph.py                    # local Docker FalkorDB
-    .venv/bin/python src/load_graph.py --sample --cloud   # the made-up network in sample_data/
+    personal-brain load --cloud            # FALKORDB_URL from the environment or .env
+    personal-brain load                    # local Docker FalkorDB
+    personal-brain load --sample --cloud   # the made-up network in sample_data/
 
 A rebuild replaces the graph. It stops if the graph holds notes from the agent
 (they would be lost); add --force to rebuild anyway.
@@ -29,12 +29,12 @@ from zoneinfo import ZoneInfo
 
 from falkordb import FalkorDB
 
-PROJECT = Path(__file__).resolve().parent.parent
+from personal_brain.paths import HOME, PACKAGE, cloud_url
 SAMPLE = "--sample" in sys.argv
-SAMPLE_DIR = Path(os.environ.get("PB_SAMPLE_DIR", PROJECT / "sample_data"))
-ENRICHED = (SAMPLE_DIR if SAMPLE else PROJECT / "data") / "enriched"
-SETTINGS = (SAMPLE_DIR if SAMPLE else PROJECT) / "my_brain.json"
-FORGOTTEN = PROJECT / "data" / "forgotten.json"   # people you told the agent to forget
+SAMPLE_DIR = Path(os.environ.get("PB_SAMPLE_DIR", PACKAGE / "sample_data"))
+ENRICHED = (SAMPLE_DIR if SAMPLE else HOME / "data") / "enriched"
+SETTINGS = (SAMPLE_DIR if SAMPLE else HOME) / "my_brain.json"
+FORGOTTEN = HOME / "data" / "forgotten.json"   # people you told the agent to forget
 GRAPH = sys.argv[sys.argv.index("--graph") + 1] if "--graph" in sys.argv else "network"
 NOW = date.today().year + date.today().month / 12
 csv.field_size_limit(10**9)
@@ -130,14 +130,14 @@ def create_search_indexes(graph):
 
 
 def find_export():
-    """The unzipped LinkedIn data export in the project folder (or $LINKEDIN_EXPORT, or the sample)."""
+    """The unzipped LinkedIn data export in your data folder (or $LINKEDIN_EXPORT, or the sample)."""
     if SAMPLE:
         return SAMPLE_DIR / "linkedin"
     if os.environ.get("LINKEDIN_EXPORT"):
         return Path(os.environ["LINKEDIN_EXPORT"])
-    found = sorted(p for p in PROJECT.glob("*LinkedInDataExport*") if (p / "Connections.csv").exists())
+    found = sorted(p for p in HOME.glob("*LinkedInDataExport*") if (p / "Connections.csv").exists())
     if not found:
-        sys.exit("No LinkedIn export found. Unzip it into the project folder, or try --sample (see README.md).")
+        sys.exit(f"No LinkedIn export found. Unzip it into {HOME}, or try --sample (see README.md).")
     return found[-1]
 
 
@@ -577,9 +577,7 @@ def main():
           f"companies {sum(h['label'] == 'Company' for h in hosted)})")
 
     if "--cloud" in sys.argv:
-        env = (PROJECT / ".env").read_text().splitlines()
-        url = next(l.split("=", 1)[1].strip() for l in env if l.startswith("FALKORDB_URL="))
-        db = FalkorDB.from_url(url)
+        db = FalkorDB.from_url(cloud_url())
     else:
         db = FalkorDB(host="localhost", port=6379)
     graph = db.select_graph(GRAPH)

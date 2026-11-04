@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Shortlists</title>
-<!-- Ranked shortlists from the FalkorDB graph (src/export_shortlists.py writes shortlists.json). -->
+<!-- Ranked shortlists from the FalkorDB graph (personal-brain export writes shortlists.json). -->
 <style>
   :root {
     color-scheme: dark;
@@ -149,7 +149,7 @@ fetch("shortlists.json", { cache: "no-store" }).then((r) => r.json()).then((d) =
   if (!d.lists[current]) current = "cohosts";
   render();
 }).catch(() => {
-  document.getElementById("note").textContent = "No shortlists yet. Run: .venv/bin/python src/export_shortlists.py --cloud";
+  document.getElementById("note").textContent = "No shortlists yet. Run: personal-brain export";
 });
 document.getElementById("filter").oninput = () => data && render();
 </script>
