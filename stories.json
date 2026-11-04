@@ -205,7 +205,7 @@
    ]
   ],
   "rows": 30,
-  "ms": 7.0,
+  "ms": 4.5,
   "source": "local FalkorDB"
  },
  {
@@ -35203,7 +35203,7 @@
    ]
   ],
   "rows": 3886,
-  "ms": 9.81,
+  "ms": 7.57,
   "source": "local FalkorDB"
  },
  {
@@ -87599,7 +87599,7 @@
    ]
   ],
   "rows": 10000,
-  "ms": 113.89,
+  "ms": 117.08,
   "source": "local FalkorDB"
  },
  {
@@ -139913,7 +139913,7 @@
    ]
   ],
   "rows": 6189,
-  "ms": 12.87,
+  "ms": 13.63,
   "source": "local FalkorDB"
  },
  {
@@ -143451,7 +143451,7 @@
    ]
   ],
   "rows": 440,
-  "ms": 81.53,
+  "ms": 70.0,
   "source": "local FalkorDB"
  },
  {
@@ -198011,7 +198011,7 @@
    ]
   ],
   "rows": 10000,
-  "ms": 15.6,
+  "ms": 80.39,
   "source": "local FalkorDB"
  },
  {
@@ -199108,7 +199108,7 @@
    ]
   ],
   "rows": 161,
-  "ms": 30.74,
+  "ms": 32.98,
   "source": "local FalkorDB"
  },
  {
@@ -209892,7 +209892,7 @@
    ]
   ],
   "rows": 1856,
-  "ms": 28.08,
+  "ms": 26.35,
   "source": "local FalkorDB"
  }
 ]
