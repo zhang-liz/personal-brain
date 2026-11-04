@@ -21,7 +21,7 @@ from urllib.parse import parse_qs, urlparse
 
 from personal_brain.paths import HOME, PACKAGE
 ROOT = HOME / "data" / "viewer"
-from personal_brain import memory
+from personal_brain import activity, memory
 from personal_brain.load_graph import TOPIC_RE
 
 # FALKORDB_URL in .env = FalkorDB Cloud; empty = local Docker FalkorDB on localhost:6379.
@@ -90,11 +90,11 @@ def node_json(nid, label, name, sub, when):
 
 def delta(since):
     nodes = [node_json(*row) for row in q(
-        "MATCH (n) WHERE id(n) >= $s RETURN id(n), labels(n)[0], n.name,"
+        "MATCH (n) WHERE id(n) >= $s OR n.source = 'agent' RETURN id(n), labels(n)[0], n.name,"
         " coalesce(n.headline, n.title, n.funding, n.summary, ''), coalesce(n.connected_on, n.date, '')",
         {"s": since}).result_set]
     edges = [{"s": a, "t": b, "type": t} for a, b, t in q(
-        "MATCH (a)-[r]->(b) WHERE id(a) >= $s OR id(b) >= $s RETURN id(a), id(b), type(r)",
+        "MATCH (a)-[r]->(b) WHERE id(a) >= $s OR id(b) >= $s OR r.note IS NOT NULL RETURN id(a), id(b), type(r)",
         {"s": since}).result_set]
     return {"nodes": nodes, "edges": edges}
 
@@ -163,6 +163,12 @@ class Handler(SimpleHTTPRequestHandler):
             except ValueError:
                 return self.send_json(400, {"error": "since must be a number."})
             return self.send_json(200, delta(since))
+        if url.path == "/api/activity":
+            try:
+                seq = int(parse_qs(url.query).get("since", ["-1"])[0])
+            except ValueError:
+                return self.send_json(400, {"error": "since must be a number."})
+            return self.send_json(200, activity.since(seq))
         return super().do_GET()
 
     def do_POST(self):

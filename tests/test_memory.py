@@ -372,6 +372,18 @@ def run_merge_on_import(g):
     memory.forget(g, "note", other["note_id"])
 
 
+def run_graph_from_environment(g):
+    """PB_GRAPH picks the graph for load too, so a load cannot write over the wrong graph."""
+    other = TEST_GRAPH + "_env"
+    cloud = ["--cloud"] if "--cloud" in sys.argv else []
+    r = subprocess.run([sys.executable, "-m", "personal_brain.load_graph", "--sample", "--force", *cloud], capture_output=True, text=True,
+                       env={**os.environ, "PB_HOME": REBUILD_HOME, "PB_GRAPH": other})
+    made, _ = memory.connect(other)
+    people = made.ro_query("MATCH (p:Person) RETURN count(p)").result_set[0][0]
+    check(r.returncode == 0 and people > 100, "load writes to the graph PB_GRAPH names")
+    made.delete()
+
+
 def run_open_client(g):
     """A rebuild renumbers field names. A client that was already open, like a running MCP server, must still read them right."""
     saved = memory.remember(g, "Open Client Olu", title="CTO", location="Oslo", note="open client", new_person=True)
@@ -708,6 +720,7 @@ def run_job_ends(g):
 
 
 def run(g):
+    run_graph_from_environment(g)
     run_open_client(g)    # first: only the first rebuild of a new graph renumbers the fields
     run_merge_on_import(g)
     run_rebuild(g)
