@@ -83,6 +83,8 @@ FIND = {
 
 def find(g, text, label=None, limit=10):
     """People, companies and events whose name matches, best first."""
+    if label and label not in FIND:
+        raise ValueError(f"Unknown label {label}. Use Person, Company or Event.")
     query = search_query(text)
     if not query:
         return []
@@ -167,10 +169,10 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
     text = note or " ".join(x for x in [f"Met {person['name']}", company and f"from {company}", event and f"at {event}"] if x)
     q("MATCH (me:Me) CREATE (me)-[:WROTE]->(:Note {id: $nid, text: $text, on: $today, source: 'agent'})", text=text)
     if person["new"]:
-        q("CREATE (:Person {id: $pid, name: $name, search: $search, company: $company, headline: $headline,"
+        # The note's text stays on the Note, so forgetting the note removes it. The job step below sets the company.
+        q("CREATE (:Person {id: $pid, name: $name, search: $search, company: '', headline: '',"
           " source: 'agent', note: $nid, messages: 0, enriched: false, event_contact: $ec})",
-          name=person["name"], search=fold(person["name"]), company=company,
-          headline=" · ".join(x for x in [company, note] if x)[:120], ec=bool(EVENT_ROLE_RE.search(note)))
+          name=person["name"], search=fold(person["name"]), ec=bool(EVENT_ROLE_RE.search(note)))
         changes.append(f"new person: {person['name']}")
     q("MATCH (me:Me), (n:Note {id: $nid}), (p:Person {id: $pid})"
       " CREATE (n)-[:ABOUT]->(p), (me)-[:MET {on: $today, note: $nid}]->(p)")
@@ -183,12 +185,13 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
         now = q("MATCH (p:Person {id: $pid})-[w:WORKED_AT {current: true}]->(c:Company) RETURN c.id, c.name")
         if cid not in {c for c, _ in now}:
             # A new job: end the old one instead of deleting it, so the history stays.
+            q("MATCH (p:Person {id: $pid}), (n:Note {id: $nid}) SET n.prev_company = coalesce(p.company, '')")
             old = q("MATCH (p:Person {id: $pid})-[w:WORKED_AT {current: true}]->(:Company)"
-                    " SET w.current = false, w.ended_on = $today, w.ended_by = $nid"
-                    " WITH p, w MATCH (n:Note {id: $nid}) SET n.prev_company = p.company RETURN count(w)")
+                    " SET w.current = false, w.ended_on = $today, w.ended_by = $nid RETURN count(w)")
             q("MATCH (p:Person {id: $pid}), (c:Company {id: $cid})"
               " CREATE (p)-[:WORKED_AT {current: true, since: $today, source: 'agent', note: $nid}]->(c)"
-              " SET p.company = $company", cid=cid, company=company)
+              " SET p.company = $company, p.headline = CASE WHEN p.source = 'agent' THEN $company ELSE p.headline END",
+              cid=cid, company=company)
             changes.append(f"works at {company} now" + (f" (ended: {', '.join(n for _, n in now)})" if old and old[0][0] else ""))
 
     if event:
@@ -237,26 +240,58 @@ def ask(g, cypher, params=None):
 # ---------- forget ----------
 
 def forget_note(g, nid):
-    """Undo one note: every relationship and node it made, and any job it ended."""
-    counts = {}
+    """Undo one note: every relationship and node it made, and any job it ended. What other notes say stays."""
+    counts = {"jobs_reopened": 0}
     params = {"nid": nid}
     if not g.ro_query("MATCH (n:Note {id: $nid}) RETURN n", params).result_set:
         raise ValueError(f"No note with id {nid}.")
-    g.query("MATCH (n:Note {id: $nid})-[:ABOUT]->(p:Person) WHERE n.prev_company IS NOT NULL"
-            " SET p.company = n.prev_company", params)
-    counts["jobs_reopened"] = g.query("MATCH ()-[w:WORKED_AT {ended_by: $nid}]->()"
-                                      " SET w.current = true, w.ended_on = NULL, w.ended_by = NULL"
-                                      " RETURN count(w)", params).result_set[0][0]
+    people = [p for (p,) in g.ro_query("MATCH (:Note {id: $nid})-[:ABOUT]->(p:Person) RETURN p.id", params).result_set]
+    # Nodes this note made or touched. Each one that came from a note goes once nothing uses it.
+    touched = {i for row in g.ro_query("MATCH (a)-[{note: $nid}]->(b) RETURN id(a), id(b)", params).result_set for i in row}
+    touched |= {i for (i,) in g.ro_query("MATCH (x {note: $nid}) RETURN id(x)", params).result_set}
+    touched |= {i for (i,) in g.ro_query("MATCH (:Note {id: $nid})-[:ABOUT]->(p) RETURN id(p)", params).result_set}
+
+    started = g.ro_query("MATCH ()-[w:WORKED_AT {note: $nid}]->() RETURN w.ended_by", params).result_set
+    if started and started[0][0]:
+        # A later note ended the job this note started, so that later note now undoes what this note ended.
+        later = {**params, "later": started[0][0]}
+        g.query("MATCH (n:Note {id: $nid}), (m:Note {id: $later}) SET m.prev_company = coalesce(n.prev_company, '')", later)
+        g.query("MATCH ()-[w:WORKED_AT {ended_by: $nid}]->() SET w.ended_by = $later", later)
+    else:
+        if started:
+            g.query("MATCH (n:Note {id: $nid})-[:ABOUT]->(p:Person) SET p.company = coalesce(n.prev_company, '')", params)
+        counts["jobs_reopened"] = g.query("MATCH ()-[w:WORKED_AT {ended_by: $nid}]->()"
+                                          " SET w.current = true, w.ended_on = NULL, w.ended_by = NULL"
+                                          " RETURN count(w)", params).result_set[0][0]
+    # You still attended an event if someone else's note or the import says you met them there.
+    g.query("MATCH (:Me)-[a:ATTENDED {note: $nid}]->(:Event)<-[m:MET_AT]-() WHERE coalesce(m.note, '') <> $nid"
+            " WITH a, collect(m.note)[0] AS other SET a.note = other", params)
+
     counts["facts"] = int(g.query("MATCH ()-[r {note: $nid}]->() DELETE r", params).relationships_deleted)
     g.query("MATCH (n:Note {id: $nid}) DETACH DELETE n", params)
-    # Nodes this note created and nothing else uses now.
-    counts["nodes"] = int(g.query("MATCH (x {note: $nid}) OPTIONAL MATCH (x)-[r]-() WITH x, count(r) AS used"
-                              " WHERE used = 0 DELETE x", params).nodes_deleted)
+    for pid in people:
+        rebuild_from_notes(g, pid)
+    counts["nodes"] = int(g.query("MATCH (x) WHERE id(x) IN $ids AND x.source = 'agent' OPTIONAL MATCH (x)-[r]-()"
+                                  " WITH x, count(r) AS used WHERE used = 0 DELETE x",
+                                  {"ids": sorted(touched)}).nodes_deleted)
     return {"forgot": "note", "id": nid, **counts}
+
+
+def rebuild_from_notes(g, pid):
+    """After a note goes: what the person's other notes say stays true. Graphs from older versions kept note text in the headline."""
+    notes = g.ro_query("MATCH (n:Note)-[:ABOUT]->(:Person {id: $pid}) RETURN n.id, n.text", {"pid": pid}).result_set
+    for nid, text in notes:
+        for topic in [t for t, rx in TOPIC_RE.items() if rx.search(text)]:
+            g.query("MATCH (p:Person {id: $pid}), (t:Topic {id: $t}) MERGE (p)-[i:INTO]->(t) ON CREATE SET i.note = $nid",
+                    {"pid": pid, "t": topic, "nid": nid})
+    g.query("MATCH (p:Person {id: $pid, source: 'agent'}) SET p.headline = coalesce(p.company, ''), p.event_contact = $ec",
+            {"pid": pid, "ec": any(EVENT_ROLE_RE.search(text) for _, text in notes)})
 
 
 def forget_fact(g, rel_id):
     """Delete one relationship, by the rel_id that ask() returns."""
+    if not str(rel_id).isdigit():
+        raise ValueError(f"{rel_id} is not a rel_id. Use the rel_id number that ask returns for a relationship.")
     rows = g.query("MATCH (a)-[r]->(b) WHERE id(r) = $id WITH a, r, b, type(r) AS t, a.name AS an, b.name AS bn"
                    " DELETE r RETURN an, t, bn", {"id": int(rel_id)}).result_set
     if not rows:
