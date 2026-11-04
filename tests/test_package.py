@@ -49,6 +49,8 @@ def main():
         def run(*args, answer="", **extra):
             return subprocess.run([brain, *args], cwd=user, env={**env, **extra}, text=True, capture_output=True, input=answer)
 
+        readme = (PROJECT / "README.md").read_text(encoding="utf-8")
+        check(not [l for l in readme.splitlines() if "docker run" in l and "falkordb_data:/var/lib/falkordb/data" not in l], "every start command in the README keeps data in a volume")
         check(run("--version").stdout.strip().endswith(__version__), "--version works")
         r = run()
         check(r.returncode == 0 and all(c in r.stdout for c in ["mcp", "load", "export", "view"]), "no command: lists the commands")

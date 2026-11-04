@@ -660,7 +660,10 @@ def main():
         graph.query("MATCH (m:Me), (c:City {id: $c}) CREATE (m)-[:LIVES_IN]->(c)", {"c": norm(me_city)})
     create_search_indexes(graph)
     if kept and kept["nodes"]:
-        print(f"Kept {notes_backup.restore(graph, kept)} notes and what they added. Use --force to drop them.")
+        notes, merged = notes_backup.restore(graph, kept)
+        print(f"Kept {notes} notes and what they added. Use --force to drop them.")
+        if merged:
+            print(f"Merged {merged} people you saved with the same people in this import.")
     notes_backup.clear()
 
     nodes = graph.query("MATCH (n) RETURN labels(n)[0], count(n) ORDER BY count(n) DESC").result_set
