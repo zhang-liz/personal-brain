@@ -16,6 +16,7 @@ Commands:
   export [--cloud]         write the viewer's data from the graph
   view                     open the viewer's server on http://127.0.0.1:8765
   notes [--limit <number>] see what your agent saved, newest first
+  followups                see what you still have to do, soonest first
   forget person <name or id> [--yes]
   forget note <id> [--yes]
   forget all-notes [--yes]
@@ -38,7 +39,7 @@ def main():
     command, args = (sys.argv[1], sys.argv[2:]) if len(sys.argv) > 1 else ("", [])
     if command == "--version":
         print(f"personal-brain {__version__}")
-    elif command in ("mcp", "load", "export", "view", "notes", "forget"):
+    elif command in ("mcp", "load", "export", "view", "notes", "followups", "forget"):
         HOME.mkdir(parents=True, exist_ok=True, mode=0o700)
         if command == "mcp":
             run("mcp_server", *args)
@@ -48,6 +49,8 @@ def main():
             run("server", *args)
         elif command == "notes":
             run("notes", *args)
+        elif command == "followups":
+            run("followups", *args)
         elif command == "forget":
             run("forget", *args)
         else:

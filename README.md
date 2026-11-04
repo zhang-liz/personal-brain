@@ -75,7 +75,7 @@ Or put `FALKORDB_URL=...` in `~/.personal-brain/.env`.
 
 | Tool | What it does |
 |---|---|
-| `remember` | Saves who you met, where they work, where you met, and their title, city and email. To correct a fact, say so: it replaces the old value. "Kestrel" and "Kestrel Inc." are one company, and a typo in an event name finds the same event. Matches the name to people already in the graph. When it is not sure which person you mean, it saves nothing and asks. A new company ends the old job and keeps it in the history. If the person has several current jobs, it asks which ended. The same call twice saves one meeting. Say when you met if it was not today. |
+| `remember` | Saves who you met, where they work, where you met, and their title, city and email. To correct a fact, say so: it replaces the old value. It also keeps follow-ups: "remind me to send Sana the deck by Friday" stays open until you say it is done. "Kestrel" and "Kestrel Inc." are one company, and a typo in an event name finds the same event. Matches the name to people already in the graph. When it is not sure which person you mean, it saves nothing and asks. A new company ends the old job and keeps it in the history. If the person has several current jobs, it asks which ended. The same call twice saves one meeting. Say when you met if it was not today. |
 | `find` | Finds people, companies and events by name, in any script, typos and missing accents included. With `about`, finds people by words in your notes, their topics, skills and headlines, such as "who did I talk to about agent memory?", and says why each one matches. |
 | `ask` | Runs a read-only Cypher query (FalkorDB refuses writes), with a 5 second limit and at most 50 rows. The tool description carries the schema. |
 
@@ -88,6 +88,8 @@ uvx personal-brain forget all-notes         # every note and everything they add
 ```
 
 Every write hangs off a `Note` node, so you can trace each fact to the note that made it. Running `personal-brain load` again with a new LinkedIn export keeps your notes and what they added. If the new import has the same fact, the import wins, and someone you saved who is now in the import becomes one person. `--force` drops your notes. `PB_GRAPH` picks the graph (default `network`). If FalkorDB is not running, the server still starts, and each tool says how to start it. On Windows, CI checks that it installs and that the server starts. It does not run with a database there, because the runners cannot run FalkorDB.
+
+Each new LinkedIn export also tells you what changed. `personal-brain load` prints who changed jobs since the last load, and your agent can ask for it later. If your export has message dates, your agent can answer "who did I lose touch with". It reads only the date, not the message. `personal-brain followups` lists what you still have to do.
 
 ## How it works
 
@@ -192,6 +194,8 @@ Then, in another terminal, run the tests. They use throwaway graphs:
 | `src/personal_brain/forget.py` | The `personal-brain forget` command |
 | `src/personal_brain/notes.py` | The `personal-brain notes` command |
 | `src/personal_brain/notes_backup.py` | Keeps your notes through a rebuild |
+| `src/personal_brain/job_changes.py` | Reports who changed jobs on each load |
+| `src/personal_brain/followups.py` | The `personal-brain followups` command |
 | `src/personal_brain/companies.py` | Decides if two company names are the same company |
 | `.mcp.json` | Tells Claude Code how to start the MCP server in a clone |
 | `tests/` | End-to-end checks of the memory tools, the MCP server and the built package, on throwaway graphs |

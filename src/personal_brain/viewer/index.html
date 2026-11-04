@@ -224,6 +224,7 @@ const edgeTypes = [...graph.types];
 const edgeTypeIndex = (t) => { let i = edgeTypes.indexOf(t); if (i < 0) { edgeTypes.push(t); i = edgeTypes.length - 1; } return i; };
 const labelToType = graph.labels.map((l) => T_IDX[l] ?? 0);
 graph.nodes.forEach((n, i) => {
+  if (graph.labels[n[0]] === "Gone") return;  // a node forget deleted: its place stays empty
   exists[i] = 1; typeOf[i] = labelToType[n[0]]; names[i] = n[1]; subs[i] = n[2]; degree[i] = n[3]; whens[i] = n[4] || "";
 });
 const meIndex = typeOf.findIndex((t, i) => exists[i] && TYPES[t].label === "Me");

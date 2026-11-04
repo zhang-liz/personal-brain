@@ -103,6 +103,10 @@ def local_database():
         moved = server.call("remember", name="", person_id=saved["person"]["id"], company="Side Works", ended_jobs=[])
         rows = server.call("ask", cypher="MATCH (:Person {name: 'Stdio Sam'})-[:WORKED_AT {current: true}]->(c) RETURN c.name ORDER BY c.name")["rows"]
         check(moved["status"] == "saved" and rows == [["Pipe Works"], ["Side Works"]], "remember takes ended_jobs over stdio")
+        todo = server.call("remember", name="", person_id=saved["person"]["id"], follow_up="Send the pipes deck", due="2030-01-15")
+        check(todo["status"] == "saved" and todo["follow_up_id"], "remember takes a follow-up over stdio")
+        closed = server.call("remember", name="", follow_up_done=todo["follow_up_id"])
+        check(closed["status"] == "saved", "remember closes a follow-up over stdio")
         fact = server.call("remember", name="", person_id=saved["person"]["id"], title="Head of Pipes", location="Berlin", email="sam@example.com")
         found = server.call("find", name="Stdio Sam", label="Person")[0]
         check(fact["status"] == "saved" and found["title"] == "Head of Pipes" and found["email"] == "sam@example.com", "remember takes title, location and email over stdio")
