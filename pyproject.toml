@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "personal-brain"
+dynamic = ["version"]
+description = "Your LinkedIn network as agent memory in FalkorDB: MCP tools to remember, find, ask and forget, plus a 3D viewer."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+keywords = ["mcp", "falkordb", "knowledge-graph", "agent-memory", "linkedin"]
+dependencies = [
+    "falkordb==1.2.0",
+    "igraph==0.11.8",
+    "mcp>=2.3,<3",
+    "redis",
+]
+
+[project.urls]
+Homepage = "https://github.com/zhang-liz/personal-brain"
+Demo = "https://zhang-liz.github.io/personal-brain/"
+
+[project.scripts]
+personal-brain = "personal_brain.cli:main"
+
+[tool.hatch.version]
+path = "src/personal_brain/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/personal_brain"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "README.md", "LICENSE", "pyproject.toml"]

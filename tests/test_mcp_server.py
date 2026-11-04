@@ -15,8 +15,7 @@ from pathlib import Path
 PROJECT = Path(__file__).resolve().parent.parent
 TEST_GRAPH = "pb_mcp_test"
 NO_DATABASE = "redis://localhost:6399"
-sys.path.insert(0, str(PROJECT / "src"))
-import memory  # noqa: E402
+from personal_brain import memory  # noqa: E402
 
 
 def check(ok, what):
@@ -25,13 +24,18 @@ def check(ok, what):
         raise SystemExit(1)
 
 
-class Server:
-    """The server from .mcp.json, started from src/, spoken to in plain JSON-RPC."""
+def from_mcp_json(url):
+    """The server as .mcp.json starts it, from a subfolder."""
+    config = json.loads((PROJECT / ".mcp.json").read_text())["mcpServers"]["personal-brain"]
+    return Server([config["command"], *config["args"]], PROJECT / "src",
+                  {**os.environ, "FALKORDB_URL": url, "PB_GRAPH": TEST_GRAPH})
 
-    def __init__(self, url):
-        config = json.loads((PROJECT / ".mcp.json").read_text())["mcpServers"]["personal-brain"]
-        self.process = subprocess.Popen([config["command"], *config["args"]], cwd=PROJECT / "src", text=True,
-                                        env={**os.environ, "FALKORDB_URL": url, "PB_GRAPH": TEST_GRAPH},
+
+class Server:
+    """An MCP server, spoken to in plain JSON-RPC."""
+
+    def __init__(self, command, cwd, env):
+        self.process = subprocess.Popen(command, cwd=cwd, env=env, text=True,
                                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         self.last_id = 0
         init = self.request("initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
@@ -63,7 +67,7 @@ class Server:
 
 
 def no_database():
-    server = Server(NO_DATABASE)
+    server = from_mcp_json(NO_DATABASE)
     tools = [t["name"] for t in server.request("tools/list")["result"]["tools"]]
     check(sorted(tools) == ["ask", "find", "forget", "remember"], "no database: server starts and lists its tools")
     check(bool(server.info.get("version")), "server reports a version")
@@ -76,7 +80,7 @@ def no_database():
 def local_database():
     os.environ["FALKORDB_URL"] = ""
     graph, _ = memory.connect(TEST_GRAPH)
-    server = Server("")
+    server = from_mcp_json("")
     try:
         saved = server.call("remember", name="Stdio Sam", company="Pipe Works", note="met over stdio")
         check(saved.get("status") == "saved", "remember over stdio")

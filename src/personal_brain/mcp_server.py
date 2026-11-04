@@ -1,11 +1,8 @@
 """MCP server: your Personal Brain graph as your agent's memory.
 
 Four tools on one FalkorDB graph: remember, find, ask, forget. Claude Code
-starts it from .mcp.json in the project folder. Other MCP clients (stdio), with
-full paths:
-
-    command: /path/to/personal-brain/.venv/bin/python
-    args:    /path/to/personal-brain/src/mcp_server.py
+and other MCP clients start it over stdio: `uvx personal-brain mcp`. In a clone,
+Claude Code uses .mcp.json.
 
 FALKORDB_URL (environment or .env) = FalkorDB Cloud; empty = local FalkorDB on
 localhost:6379. PB_GRAPH picks the graph (default "network"). The tools only
@@ -13,15 +10,11 @@ ever touch that one graph. The server starts without a database: each tool
 connects when it runs, and says what to do if it cannot.
 """
 
-import sys
-from pathlib import Path
-
 import redis
 from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import memory  # noqa: E402
+from personal_brain import __version__, memory
 
 GRAPH = None
 NO_DATABASE = ("Cannot reach FalkorDB ({}). Tell the user to start it with "
@@ -45,7 +38,7 @@ def answer(fn, *args):
         return {"error": str(e)}
 
 
-server = MCPServer("personal-brain", version="0.1.0", instructions=(
+server = MCPServer("personal-brain", version=__version__, instructions=(
     "The user's professional network and meeting notes, as a graph in FalkorDB. "
     "Use find to look up a person, company or event by name. Use ask for questions that follow links "
     "(who knows whom, who works where, who I met at which event). Use remember when the user tells you "
@@ -95,5 +88,9 @@ def forget(what: str, id: str) -> dict:
     return answer(memory.forget, what, id)
 
 
-if __name__ == "__main__":
+def main():
     server.run()
+
+
+if __name__ == "__main__":
+    main()

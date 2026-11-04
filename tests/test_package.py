@@ -1,0 +1,100 @@
+"""Build the package and use it the way someone who installed it does: another folder, a new HOME, no repo.
+
+Needs uv and local FalkorDB (graph "pb_package_test", deleted at the end).
+
+    .venv/bin/python tests/test_package.py
+"""
+
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.request
+import zipfile
+from pathlib import Path
+
+from test_mcp_server import Server, check
+
+PROJECT = Path(__file__).resolve().parent.parent
+TEST_GRAPH = "pb_package_test"
+
+
+def main():
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        subprocess.run(["uv", "build", "--wheel", "--out-dir", str(tmp / "dist"), str(PROJECT)], check=True, capture_output=True)
+        wheel = next((tmp / "dist").glob("*.whl"))
+        names = zipfile.ZipFile(wheel).namelist()
+        check("personal_brain/viewer/index.html" in names and "personal_brain/viewer/vendor/three/build/three.module.js" in names,
+              "wheel holds the viewer")
+        check("personal_brain/sample_data/linkedin/Connections.csv" in names, "wheel holds the sample network")
+        private = [n for n in names if n.endswith(".env") or n.startswith("data/") or "LinkedInDataExport" in n
+                   or n.endswith("my_brain.json")]
+        check(not private, "wheel holds no private files")
+
+        subprocess.run(["uv", "venv", "--python", sys.executable, str(tmp / "venv")], check=True, capture_output=True)
+        subprocess.run(["uv", "pip", "install", "--python", str(tmp / "venv/bin/python"), str(wheel)], check=True, capture_output=True)
+        brain = str(tmp / "venv/bin/personal-brain")
+        user = tmp / "user"
+        user.mkdir()
+        env = {k: v for k, v in os.environ.items() if k not in ("FALKORDB_URL", "PB_HOME", "PB_GRAPH")}
+        env.update(HOME=str(user), PB_GRAPH=TEST_GRAPH)
+        home = user / ".personal-brain"
+
+        def run(*args, **extra):
+            return subprocess.run([brain, *args], cwd=user, env={**env, **extra}, text=True, capture_output=True)
+
+        check(run("--version").stdout.strip().endswith("0.1.0"), "--version works")
+        r = run()
+        check(r.returncode == 0 and all(c in r.stdout for c in ["mcp", "load", "export", "view"]), "no command: lists the commands")
+
+        # .env in the data folder: the server reads it. Port 6399 has no database, so the error shows that it did.
+        home.mkdir()
+        (home / ".env").write_text("FALKORDB_URL=redis://localhost:6399\n")
+        server = Server([brain, "mcp"], user, env)
+        error = server.call("find", name="Anyone")["error"]
+        check("6399" in error, "server reads .env from ~/.personal-brain")
+        server.stop()
+        (home / ".env").unlink()
+        home.rmdir()
+
+        try:
+            r = run("load", "--sample", "--graph", TEST_GRAPH, "--force")
+            check(r.returncode == 0, "load --sample works from another folder" + (": " + r.stderr[-300:] if r.returncode else ""))
+            check(home.is_dir() and home.stat().st_mode & 0o077 == 0, "data folder is private to the user")
+
+            server = Server([brain, "mcp"], user, env)
+            found = server.call("find", name="Kestrel Graph", label="Company")
+            check(found and found[0]["name"] == "Kestrel Graph", "mcp finds the sample network")
+            saved = server.call("remember", name="Packaged Pat", note="installed from a wheel", new_person=True)
+            gone = server.call("forget", what="person", id=saved["person"]["id"])
+            check(gone.get("forgot") == "person" and (home / "data/forgotten.json").exists(), "forget writes to the data folder")
+            server.stop()
+
+            r = run("export")
+            check(r.returncode == 0 and (home / "data/viewer/graph.json").exists(),
+                  "export writes to the data folder" + (": " + r.stderr[-300:] if r.returncode else ""))
+
+            view = subprocess.Popen([brain, "view"], cwd=user, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            try:
+                for _ in range(30):
+                    try:
+                        page = urllib.request.urlopen("http://127.0.0.1:8765/").read().decode()
+                        break
+                    except OSError:
+                        time.sleep(0.5)
+                graph = json.loads(urllib.request.urlopen("http://127.0.0.1:8765/graph.json").read())
+                check("three" in page and graph["nodes"], "view serves the page and the graph")
+            finally:
+                view.terminate()
+                view.wait(timeout=10)
+        finally:
+            sys.path.insert(0, str(PROJECT / "src"))
+            from falkordb import FalkorDB
+            FalkorDB(host="localhost", port=6379).select_graph(TEST_GRAPH).delete()
+
+
+if __name__ == "__main__":
+    main()

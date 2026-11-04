@@ -2,7 +2,7 @@
   "mcpServers": {
     "personal-brain": {
       "command": "sh",
-      "args": ["-c", "cd \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\" && exec .venv/bin/python src/mcp_server.py"]
+      "args": ["-c", "cd \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\" && exec .venv/bin/personal-brain mcp"]
     }
   }
 }

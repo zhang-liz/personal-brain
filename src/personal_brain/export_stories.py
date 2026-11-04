@@ -3,7 +3,7 @@
 Each story is a Cypher query. We store the query text, FalkorDB's run time, and
 the node ids it touched, so the viewer can light them up.
 
-    .venv/bin/python src/export_stories.py --cloud
+    personal-brain export --cloud
 """
 
 import json
@@ -14,8 +14,8 @@ from pathlib import Path
 
 from falkordb import FalkorDB
 
-PROJECT = Path(__file__).resolve().parent.parent
-OUT = Path(os.environ.get("PB_VIEWER_DIR", PROJECT / "data" / "viewer")) / "stories.json"
+from personal_brain.paths import HOME, cloud_url
+OUT = Path(os.environ.get("PB_VIEWER_DIR", HOME / "data" / "viewer")) / "stories.json"
 
 STORIES = [
     {
@@ -114,9 +114,7 @@ RETURN id(me), id(friend), id(p)""",
 
 def connect():
     if "--cloud" in sys.argv:
-        env = (PROJECT / ".env").read_text().splitlines()
-        url = next(l.split("=", 1)[1].strip() for l in env if l.startswith("FALKORDB_URL="))
-        return FalkorDB.from_url(url), "FalkorDB Cloud"
+        return FalkorDB.from_url(cloud_url()), "FalkorDB Cloud"
     return FalkorDB(host="localhost", port=6379), "local FalkorDB"
 
 

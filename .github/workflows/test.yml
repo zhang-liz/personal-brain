@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
-      - run: python -m venv .venv && .venv/bin/pip install -r requirements.txt
+      - run: python -m venv .venv && .venv/bin/pip install -e . uv
       - name: Wait for FalkorDB
         run: |
           for i in $(seq 1 30); do
@@ -31,3 +31,4 @@ jobs:
           exit 1
       - run: .venv/bin/python tests/test_memory.py
       - run: .venv/bin/python tests/test_mcp_server.py
+      - run: PATH="$PWD/.venv/bin:$PATH" .venv/bin/python tests/test_package.py
