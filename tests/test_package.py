@@ -108,6 +108,32 @@ def main():
                   "export writes to the data folder" + (": " + r.stderr[-300:] if r.returncode else ""))
             check(not [f for f in (home / "data").rglob("*") if "shortlists" in f.name], "export writes no shortlists")
 
+            # Forgetting someone also takes them out of the viewer's files, and it asks nothing else of you.
+            viewer_files = lambda: "".join(f.read_text() for f in (home / "data/viewer").glob("*.json"))
+            server = Server([brain, "mcp"], user, env)
+            memory_note = server.call("remember", name="Viewer Vera", company="Vera Co", note="secret viewer words", new_person=True)
+            server.stop()
+            check(run("export").returncode == 0 and "Viewer Vera" in viewer_files(), "an exported person is in the viewer's files")
+            r = run("forget", "person", "Viewer Vera", "--yes")
+            check(r.returncode == 0 and "Viewer Vera" not in viewer_files() and "Vera Co" not in viewer_files(),
+                  "forget person takes them out of the viewer's files" + (": " + r.stderr[-300:] if r.returncode else ""))
+            server = Server([brain, "mcp"], user, env)
+            memory_note = server.call("remember", name="Note Nell", note="more words", new_person=True)
+            server.stop()
+            run("export")
+            check("Note Nell" in viewer_files(), "a person from a note is in the viewer's files")
+            r = run("forget", "note", memory_note["note_id"], "--yes")
+            check(r.returncode == 0 and "Note Nell" not in viewer_files(), "forget note takes what it added out of the viewer's files")
+            # With no viewer files, forget does not make any.
+            viewer = home / "data/viewer"
+            viewer.rename(home / "data/viewer-kept")
+            server = Server([brain, "mcp"], user, env)
+            memory_note = server.call("remember", name="Nofile Ned", new_person=True)
+            server.stop()
+            r = run("forget", "note", memory_note["note_id"], "--yes")
+            check(r.returncode == 0 and not viewer.exists(), "forget makes no viewer files when you have none")
+            (home / "data/viewer-kept").rename(viewer)
+
             view = subprocess.Popen([brain, "view"], cwd=user, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             try:
                 for _ in range(30):

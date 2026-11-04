@@ -79,7 +79,7 @@ Or put `FALKORDB_URL=...` in `~/.personal-brain/.env`.
 | `find` | Finds people, companies and events by name, in any script, typos and missing accents included. With `about`, finds people by words in your notes, their topics, skills and headlines, such as "who did I talk to about agent memory?", and says why each one matches. |
 | `ask` | Runs a read-only Cypher query (FalkorDB refuses writes), with a 5 second limit and at most 50 rows. The tool description carries the schema. |
 
-No tool deletes, so text hidden in a LinkedIn headline cannot make your agent delete anything. To delete, run the command yourself. It asks first, unless you add `--yes`:
+No tool deletes, so text hidden in a LinkedIn headline cannot make your agent delete anything. To delete, run the command yourself. It asks first, unless you add `--yes`, and it also updates the viewer's files if you have them:
 
 ```bash
 uvx personal-brain forget note <id>         # one note and everything it added. remember's reply gives this command
