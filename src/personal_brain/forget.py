@@ -1,4 +1,4 @@
-"""personal-brain forget: delete a person or a note.
+"""personal-brain forget: delete a person, a note, or every note.
 
 Only you run this. The agent has no tool that deletes, so text hidden in a
 LinkedIn headline cannot make it delete anything. It works on the same graph as
@@ -6,6 +6,7 @@ the MCP server: FALKORDB_URL (environment or .env), else local FalkorDB.
 
     personal-brain forget person "Ada Kestrel"
     personal-brain forget note note-1a2b3c4d5e6f --yes
+    personal-brain forget all-notes                     # clear a live demo
 """
 
 import sys
@@ -14,7 +15,8 @@ import redis
 
 from personal_brain import memory
 
-USAGE = "Use: personal-brain forget person <name or id> [--yes], or personal-brain forget note <id> [--yes]"
+USAGE = ("Use: personal-brain forget person <name or id> [--yes], personal-brain forget note <id> [--yes], "
+         "or personal-brain forget all-notes [--yes]")
 
 
 def person_to_forget(g, text):
@@ -46,18 +48,23 @@ def main():
     args = sys.argv[1:]
     yes = "--yes" in args
     args = [a for a in args if a != "--yes"]
-    if len(args) < 2 or args[0] not in ("person", "note"):
+    every_note = args == ["all-notes"]
+    if not every_note and (len(args) < 2 or args[0] not in ("person", "note")):
         sys.exit(USAGE)
     what, target = args[0], " ".join(args[1:])
     try:
         g, where = memory.connect()
         memory.setup(g)
-        id_, description = person_to_forget(g, target) if what == "person" else note_to_forget(g, target)
+        if every_note:
+            count = g.ro_query("MATCH (n:Note) RETURN count(n)").result_set[0][0]
+            description = f"all {count} notes and everything they added"
+        else:
+            id_, description = person_to_forget(g, target) if what == "person" else note_to_forget(g, target)
         if not yes:
             print(f"Delete {description}, on {where}? This cannot be undone. [y/N] ", end="", flush=True)
             if sys.stdin.readline().strip().lower() not in ("y", "yes"):
                 sys.exit("Nothing deleted.")
-        print(memory.forget(g, what, id_))
+        print(f"Deleted {memory.forget_all_notes(g)} nodes." if every_note else memory.forget(g, what, id_))
     except redis.exceptions.ConnectionError as e:
         sys.exit(f"Cannot reach FalkorDB ({e}).")
 

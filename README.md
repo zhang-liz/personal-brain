@@ -84,6 +84,7 @@ No tool deletes, so text hidden in a LinkedIn headline cannot make your agent de
 ```bash
 uvx personal-brain forget note <id>         # one note and everything it added. remember's reply gives this command
 uvx personal-brain forget person "Name"     # a person and every note about them. They stay out of future rebuilds
+uvx personal-brain forget all-notes         # every note and everything they added, to clear a live demo
 ```
 
 Every write hangs off a `Note` node, so you can trace each fact to the note that made it. `PB_GRAPH` picks the graph (default `network`). If FalkorDB is not running, the server still starts, and each tool says how to start it. Windows is not tested.
@@ -187,7 +188,7 @@ Then, in another terminal, run the tests. They use throwaway graphs:
 | `src/personal_brain/export_stories.py` | The "Ask the graph" questions and their Cypher |
 | `src/personal_brain/export_shortlists.py` | Ranked shortlists: co-hosts & sponsors, podcast guests, places to speak |
 | `src/personal_brain/viewer/shortlists.html` | The shortlists page (filter, download CSV) |
-| `src/personal_brain/server.py` | Serves the viewer and the live Remember / Forget API |
+| `src/personal_brain/server.py` | Serves the viewer and the live Remember API, to the viewer's own page only |
 | `src/personal_brain/memory.py` | The memory itself: remember, find, ask, forget (used by the MCP server, the viewer and the forget command) |
 | `src/personal_brain/mcp_server.py` | The MCP server for Claude Code and other agents |
 | `src/personal_brain/forget.py` | The `personal-brain forget` command |

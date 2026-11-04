@@ -5,9 +5,10 @@ adds a tiny API that talks to FalkorDB (Cloud or local) live:
 
     GET  /api/delta?since=N   nodes with id >= N (added after the export) + their edges
     POST /api/remember        {"text": "Met Maya from Supabase at AI Engineer Summit, runs events"}
-    POST /api/forget          undo every remembered note (see memory.py)
 
-Only data/viewer/ is served, never your data folder (.env lives there).
+Only data/viewer/ is served, never your data folder (.env lives there). Only the
+viewer's own page can use it: a request from another website is refused. Nothing
+here deletes. To clear notes, run `personal-brain forget all-notes`.
 """
 
 import json
@@ -96,12 +97,19 @@ def delta(since):
     return {"nodes": nodes, "edges": edges}
 
 
-def forget():
-    """The viewer's reset button: undo every note, and everything the notes added."""
-    return {"deleted": memory.forget_all_notes(GRAPH)}
+# A website you visit can send requests to this server. The browser says where they come from.
+THIS_SERVER = ("127.0.0.1:8765", "localhost:8765")
 
 
 class Handler(SimpleHTTPRequestHandler):
+    def refused(self):
+        """True, after replying, unless the request names this server and comes from its own page or no website."""
+        origin = self.headers.get("Origin")
+        if self.headers.get("Host") in THIS_SERVER and (origin is None or urlparse(origin).netloc in THIS_SERVER):
+            return False
+        self.send_json(403, {"error": "This server only takes requests from its own page."})
+        return True
+
     def send_json(self, status, body):
         data = json.dumps(body, ensure_ascii=False).encode()
         self.send_response(status)
@@ -118,6 +126,8 @@ class Handler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def do_GET(self):
+        if self.refused():
+            return
         url = urlparse(self.path)
         if url.path == "/api/delta":
             since = int(parse_qs(url.query).get("since", ["0"])[0])
@@ -125,6 +135,8 @@ class Handler(SimpleHTTPRequestHandler):
         return super().do_GET()
 
     def do_POST(self):
+        if self.refused():
+            return
         url = urlparse(self.path)
         length = min(int(self.headers.get("Content-Length") or 0), 10_000)
         body = json.loads(self.rfile.read(length) or b"{}")
@@ -132,8 +144,6 @@ class Handler(SimpleHTTPRequestHandler):
         try:
             if url.path == "/api/remember":
                 status, out = remember(str(body.get("text", ""))[:500])
-            elif url.path == "/api/forget":
-                status, out = 200, forget()
             else:
                 status, out = 404, {"error": "not found"}
         except Exception as exc:  # surface FalkorDB errors to the page during the demo
