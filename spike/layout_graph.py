@@ -7,6 +7,7 @@ in 2D and 3D, and writes the positions back into the same file.
 """
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -14,7 +15,7 @@ from pathlib import Path
 import igraph as ig
 
 PROJECT = Path(__file__).resolve().parent.parent
-GRAPH_JSON = PROJECT / "data" / "viewer" / "graph.json"
+GRAPH_JSON = Path(os.environ.get("PB_VIEWER_DIR", PROJECT / "data" / "viewer")) / "graph.json"
 RADIUS = 1000.0
 # "Me" links to everyone, which would crush the map into one ball: leave those
 # links out of the layout and put Me at the center afterwards. Skill links are
