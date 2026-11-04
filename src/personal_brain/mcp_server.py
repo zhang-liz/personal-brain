@@ -1,6 +1,7 @@
 """MCP server: your Personal Brain graph as your agent's memory.
 
-Four tools on one FalkorDB graph: remember, find, ask, forget. Claude Code
+Three tools on one FalkorDB graph: remember, find, ask. None of them deletes:
+only the user can, with `personal-brain forget`. Claude Code
 and other MCP clients start it over stdio: `uvx personal-brain mcp`. In a clone,
 Claude Code uses .mcp.json.
 
@@ -42,7 +43,8 @@ server = MCPServer("personal-brain", version=__version__, instructions=(
     "The user's professional network and meeting notes, as a graph in FalkorDB. "
     "Use find to look up a person, company or event by name. Use ask for questions that follow links "
     "(who knows whom, who works where, who I met at which event). Use remember when the user tells you "
-    "about someone they met. Use forget only when the user asks to forget something."))
+    "about someone they met. You cannot delete anything. If the user wants something forgotten, tell them to run "
+    "`personal-brain forget person <name>` or the undo command that remember returned."))
 
 
 @server.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False))
@@ -54,7 +56,8 @@ def remember(name: str, company: str = "", event: str = "", note: str = "",
     note: what you talked about, in the user's words.
     It matches the name, typos included, to people already in the graph. If it is not sure which person it is, it saves
     nothing and returns candidates: ask the user, then call again with person_id (from the candidates)
-    or new_person=true. A new company ends their old job and keeps it in their history."""
+    or new_person=true. A new company ends their old job and keeps it in their history.
+    The reply has an undo command. Only the user can run it: you cannot delete anything."""
     return answer(memory.remember, name, company, event, note, person_id, new_person)
 
 
@@ -62,7 +65,7 @@ def remember(name: str, company: str = "", event: str = "", note: str = "",
 def find(name: str, label: str = "") -> list | dict:
     """Find people, companies or events by name. Typos and missing accents are fine.
 
-    label: "Person", "Company" or "Event" to search only one kind. Returns ids for ask, remember and forget,
+    label: "Person", "Company" or "Event" to search only one kind. Returns ids for ask and remember,
     plus where each person works now, so you can tell two people with the same name apart."""
     # An empty list reaches the agent as an empty reply, so say it in words.
     return answer(memory.find, name, label or None) or {
@@ -72,20 +75,10 @@ def find(name: str, label: str = "") -> list | dict:
 # The schema goes in the description: the agent writes better Cypher when it sees it.
 @server.tool(annotations=ToolAnnotations(read_only_hint=True), description=(
     "Run a read-only OpenCypher query on the user's network. Writes are refused.\n"
-    "Use $name parameters for values from the user. Returns at most 50 rows; use LIMIT and ORDER BY. "
-    "Relationships come back with a rel_id, which forget(what=\"fact\") takes.\n\nSchema:\n" + memory.SCHEMA))
+    "Use $name parameters for values from the user. Returns at most 50 rows; use LIMIT and ORDER BY."
+    "\n\nSchema:\n" + memory.SCHEMA))
 def ask(cypher: str, params: dict | None = None) -> dict:
     return answer(memory.ask, cypher, params)
-
-
-@server.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=True))
-def forget(what: str, id: str) -> dict:
-    """Forget something, only when the user asks you to.
-
-    what="note": one note (id from remember) and every fact it added; a job it ended comes back.
-    what="fact": one relationship (rel_id from ask).
-    what="person": a person (id from find), every note about them, and they stay out of future rebuilds."""
-    return answer(memory.forget, what, id)
 
 
 def main():

@@ -14,6 +14,9 @@ Commands:
                            build the graph from your LinkedIn export, or from the made-up sample
   export [--cloud]         write the viewer's data from the graph
   view                     open the viewer's server on http://127.0.0.1:8765
+  forget person <name or id> [--yes]
+  forget note <id> [--yes]
+                           delete a person or a note. Only you can do this, not your agent
 
 Your data folder: {HOME}
 """
@@ -29,7 +32,7 @@ def main():
     command, args = (sys.argv[1], sys.argv[2:]) if len(sys.argv) > 1 else ("", [])
     if command == "--version":
         print(f"personal-brain {__version__}")
-    elif command in ("mcp", "load", "export", "view"):
+    elif command in ("mcp", "load", "export", "view", "forget"):
         HOME.mkdir(parents=True, exist_ok=True, mode=0o700)
         if command == "mcp":
             run("mcp_server", *args)
@@ -37,6 +40,8 @@ def main():
             run("load_graph", *args)
         elif command == "view":
             run("server", *args)
+        elif command == "forget":
+            run("forget", *args)
         else:
             run("export_graph", *args)
             run("layout_graph", "--dims=2")

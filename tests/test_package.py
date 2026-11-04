@@ -43,8 +43,8 @@ def main():
         env.update(HOME=str(user), PB_GRAPH=TEST_GRAPH)
         home = user / ".personal-brain"
 
-        def run(*args, **extra):
-            return subprocess.run([brain, *args], cwd=user, env={**env, **extra}, text=True, capture_output=True)
+        def run(*args, answer="", **extra):
+            return subprocess.run([brain, *args], cwd=user, env={**env, **extra}, text=True, capture_output=True, input=answer)
 
         check(run("--version").stdout.strip().endswith("0.1.0"), "--version works")
         r = run()
@@ -69,8 +69,35 @@ def main():
             found = server.call("find", name="Kestrel Graph", label="Company")
             check(found and found[0]["name"] == "Kestrel Graph", "mcp finds the sample network")
             saved = server.call("remember", name="Packaged Pat", note="installed from a wheel", new_person=True)
-            gone = server.call("forget", what="person", id=saved["person"]["id"])
-            check(gone.get("forgot") == "person" and (home / "data/forgotten.json").exists(), "forget writes to the data folder")
+
+            def exists(name):
+                return isinstance(server.call("find", name=name, label="Person"), list)
+
+            check(run("forget").returncode != 0, "forget with nothing to forget: says how to use it")
+            r = run("forget", "person", saved["person"]["id"])
+            check(r.returncode != 0 and exists("Packaged Pat"), "forget person: no answer keeps them")
+            r = run("forget", "person", saved["person"]["id"], answer="n\n")
+            check(r.returncode != 0 and exists("Packaged Pat"), "forget person: answer n keeps them")
+            r = run("forget", "person", saved["person"]["id"], answer="y\n")
+            check(r.returncode == 0 and not exists("Packaged Pat") and (home / "data/forgotten.json").exists(),
+                  "forget person: answer y deletes them and writes to the data folder" + (": " + r.stderr[-300:] if r.returncode else ""))
+
+            server.call("remember", name="Named Nia", new_person=True)
+            r = run("forget", "person", "Named Nia", "--yes")
+            check(r.returncode == 0 and not exists("Named Nia"), "forget person by name")
+
+            first = server.call("remember", name="Twin Tia", new_person=True)
+            server.call("remember", name="Twin Tia", new_person=True)
+            r = run("forget", "person", "Twin Tia", "--yes")
+            check(r.returncode != 0 and first["person"]["id"] in r.stdout + r.stderr and exists("Twin Tia"),
+                  "forget person: same name twice lists ids and deletes nobody")
+            check(run("forget", "person", "Nobody Here", "--yes").returncode != 0, "forget person: unknown name fails")
+
+            note = server.call("remember", name="", person_id=first["person"]["id"], note="undo this text")
+            r = run(*note["undo"].split()[1:], "--yes")
+            rows = server.call("ask", cypher="MATCH (n:Note {id: $id}) RETURN n.id", params={"id": note["note_id"]})["rows"]
+            check(r.returncode == 0 and rows == [], "the undo command remember gives removes the note")
+            check(run("forget", "note", "note-nope", "--yes").returncode != 0, "forget note: unknown id fails")
             server.stop()
 
             r = run("export")
