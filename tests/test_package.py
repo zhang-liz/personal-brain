@@ -16,6 +16,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+from personal_brain import __version__
 from test_mcp_server import Server, check
 
 PROJECT = Path(__file__).resolve().parent.parent
@@ -48,7 +49,7 @@ def main():
         def run(*args, answer="", **extra):
             return subprocess.run([brain, *args], cwd=user, env={**env, **extra}, text=True, capture_output=True, input=answer)
 
-        check(run("--version").stdout.strip().endswith("0.1.0"), "--version works")
+        check(run("--version").stdout.strip().endswith(__version__), "--version works")
         r = run()
         check(r.returncode == 0 and all(c in r.stdout for c in ["mcp", "load", "export", "view"]), "no command: lists the commands")
 
