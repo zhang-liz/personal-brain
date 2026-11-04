@@ -3,8 +3,8 @@
 Reads every node and edge, in pages (FalkorDB Cloud caps results at 10k rows),
 and writes data/viewer/graph.json (gitignored: it has real names).
 
-    .venv/bin/python spike/export_graph.py           # local Docker FalkorDB
-    .venv/bin/python spike/export_graph.py --cloud   # FALKORDB_URL from .env
+    .venv/bin/python src/export_graph.py           # local Docker FalkorDB
+    .venv/bin/python src/export_graph.py --cloud   # FALKORDB_URL from .env
 """
 
 import json

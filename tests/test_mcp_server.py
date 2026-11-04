@@ -15,7 +15,7 @@ from pathlib import Path
 PROJECT = Path(__file__).resolve().parent.parent
 TEST_GRAPH = "pb_mcp_test"
 NO_DATABASE = "redis://localhost:6399"
-sys.path.insert(0, str(PROJECT / "spike"))
+sys.path.insert(0, str(PROJECT / "src"))
 import memory  # noqa: E402
 
 
@@ -26,11 +26,11 @@ def check(ok, what):
 
 
 class Server:
-    """The server from .mcp.json, started from spike/, spoken to in plain JSON-RPC."""
+    """The server from .mcp.json, started from src/, spoken to in plain JSON-RPC."""
 
     def __init__(self, url):
         config = json.loads((PROJECT / ".mcp.json").read_text())["mcpServers"]["personal-brain"]
-        self.process = subprocess.Popen([config["command"], *config["args"]], cwd=PROJECT / "spike", text=True,
+        self.process = subprocess.Popen([config["command"], *config["args"]], cwd=PROJECT / "src", text=True,
                                         env={**os.environ, "FALKORDB_URL": url, "PB_GRAPH": TEST_GRAPH},
                                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         self.last_id = 0

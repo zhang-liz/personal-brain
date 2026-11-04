@@ -5,7 +5,7 @@ starts it from .mcp.json in the project folder. Other MCP clients (stdio), with
 full paths:
 
     command: /path/to/personal-brain/.venv/bin/python
-    args:    /path/to/personal-brain/spike/mcp_server.py
+    args:    /path/to/personal-brain/src/mcp_server.py
 
 FALKORDB_URL (environment or .env) = FalkorDB Cloud; empty = local FalkorDB on
 localhost:6379. PB_GRAPH picks the graph (default "network"). The tools only
