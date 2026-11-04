@@ -777,7 +777,7 @@ rememberForm.addEventListener("submit", async (ev) => {
       `${data.ms} ms`].filter(Boolean).join(" · ");
     setTimeout(() => focusNode(data.person), 300);
   } catch {
-    rememberHint.textContent = "Start the demo server: ./spike/serve_viewer.sh";
+    rememberHint.textContent = "Start the demo server: ./src/serve_viewer.sh";
   }
 });
 document.getElementById("forget").onclick = async () => {
@@ -786,7 +786,7 @@ document.getElementById("forget").onclick = async () => {
     const data = await res.json();
     rememberHint.textContent = `Deleted ${data.deleted} remembered nodes. Reloading…`;
     setTimeout(() => location.reload(), 700);
-  } catch { rememberHint.textContent = "Start the demo server: ./spike/serve_viewer.sh"; }
+  } catch { rememberHint.textContent = "Start the demo server: ./src/serve_viewer.sh"; }
 };
 
 // ---------- search ----------
@@ -914,7 +914,7 @@ async function runDemo() {
   stopDemo();
 }
 
-// Debug handle for the console (spike only).
+// Debug handle for the console (development only).
 window.__brain = { renderer, composer, bloom, scene, camera, cur, nodeColor, nodeSize, linePos, lineColor, get nN() { return nN; }, get nE() { return nE; } };
 
 // ---------- startup ----------
@@ -922,7 +922,7 @@ if (stories[0]?.source) rememberHint.textContent = `Writes to ${stories[0].sourc
 computeBirths(); updateStats(); renderLayers(); applyStyle();
 fetch(`/api/delta?since=${N0}`, { cache: "no-store" })
   .then((r) => (r.ok ? r.json() : null)).then((d) => { if (d && d.nodes.length) { addGraphData(d); applyStyle(); } })
-  .catch(() => { rememberHint.textContent = "Remember needs the demo server (./spike/serve_viewer.sh)"; });
+  .catch(() => { rememberHint.textContent = "Remember needs the demo server (./src/serve_viewer.sh)"; });
 
 let last = performance.now();
 function frame(now) {

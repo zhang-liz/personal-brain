@@ -50,14 +50,14 @@ def main():
     SITE.mkdir(parents=True, exist_ok=True)
     env = {"PB_SAMPLE_DIR": str(DATA), "PB_VIEWER_DIR": str(SITE), "PB_GRAPH": "demo"}
     run("scripts/make_demo_data.py", *sys.argv[1:])
-    run("spike/load_graph.py", "--sample", "--graph", "demo", **env)
-    run("spike/export_graph.py", **env)
-    run("spike/layout_graph.py", **env)
+    run("src/load_graph.py", "--sample", "--graph", "demo", **env)
+    run("src/export_graph.py", **env)
+    run("src/layout_graph.py", **env)
     shutil.copyfile(SITE / "graph.json", DATA / "graph_raw.json")
     shape_galaxy()
-    run("spike/export_stories.py", **env)
-    run("spike/export_shortlists.py", **env)
-    shutil.copytree(PROJECT / "spike" / "viewer", SITE, dirs_exist_ok=True)
+    run("src/export_stories.py", **env)
+    run("src/export_shortlists.py", **env)
+    shutil.copytree(PROJECT / "src" / "viewer", SITE, dirs_exist_ok=True)
     index = SITE / "index.html"
     page = index.read_text()
     # The title stays "Personal Brain", not "<first name>'s Personal Brain".
