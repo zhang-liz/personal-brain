@@ -172,6 +172,27 @@ def main():
                     except urllib.error.HTTPError as e:
                         return e.code
 
+                def post_raw(body, length=None):
+                    """The status and JSON reply for a body that may be broken. A dropped connection is a failure."""
+                    import http.client
+                    connection = http.client.HTTPConnection("127.0.0.1", 8765, timeout=10)
+                    connection.putrequest("POST", "/api/remember")
+                    connection.putheader("Content-Length", str(len(body) if length is None else length))
+                    connection.endheaders()
+                    connection.send(body)
+                    reply = connection.getresponse()
+                    return reply.status, json.loads(reply.read())
+
+                for label, body in {"broken JSON": b"{not json", "JSON that is not an object": b"[1, 2]",
+                                    "text that is not UTF-8": b'{"text": "\xff\xfe"}'}.items():
+                    status, reply = post_raw(body)
+                    check(status == 400 and reply.get("error"), f"the viewer API answers 400 to {label}")
+                status, reply = post_raw(b'{"text": "' + b"x" * 20000 + b'"}')
+                check(status == 413 and reply.get("error"), "the viewer API answers 413 to a body that is too big")
+                status, reply = post_raw(b"{}", length="abc")
+                check(status == 400 and reply.get("error"), "the viewer API answers 400 to a bad length")
+                check(get_with("/api/delta?since=abc") == 400, "the viewer API answers 400 to a bad since")
+                check(urllib.request.urlopen("http://127.0.0.1:8765/graph.json").status == 200, "the viewer keeps running after bad requests")
                 check(post("/api/forget", "") == 404, "the viewer API cannot delete")
                 check(post("/api/remember", "Met Evil Eve from Bad Co", Origin="https://evil.example") == 403,
                       "the viewer API refuses a request from another website")

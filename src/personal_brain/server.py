@@ -103,7 +103,33 @@ def delta(since):
 THIS_SERVER = ("127.0.0.1:8765", "localhost:8765")
 
 
+MAX_BODY = 10_000
+
+
+class BadRequest(Exception):
+    """A request the server can answer with an error the viewer can show."""
+
+    def __init__(self, status, message):
+        super().__init__(message)
+        self.status = status
+
+
 class Handler(SimpleHTTPRequestHandler):
+    def json_body(self):
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            raise BadRequest(400, "Content-Length must be a number.") from None
+        if length > MAX_BODY:
+            raise BadRequest(413, f"The request is longer than {MAX_BODY} bytes.")
+        try:
+            body = json.loads(self.rfile.read(max(length, 0)) or b"{}")
+        except ValueError:
+            raise BadRequest(400, "The request is not valid JSON.") from None
+        if not isinstance(body, dict):
+            raise BadRequest(400, "The request must be a JSON object.")
+        return body
+
     def refused(self):
         """True, after replying, unless the request names this server and comes from its own page or no website."""
         origin = self.headers.get("Origin")
@@ -132,7 +158,10 @@ class Handler(SimpleHTTPRequestHandler):
             return
         url = urlparse(self.path)
         if url.path == "/api/delta":
-            since = int(parse_qs(url.query).get("since", ["0"])[0])
+            try:
+                since = int(parse_qs(url.query).get("since", ["0"])[0])
+            except ValueError:
+                return self.send_json(400, {"error": "since must be a number."})
             return self.send_json(200, delta(since))
         return super().do_GET()
 
@@ -140,8 +169,10 @@ class Handler(SimpleHTTPRequestHandler):
         if self.refused():
             return
         url = urlparse(self.path)
-        length = min(int(self.headers.get("Content-Length") or 0), 10_000)
-        body = json.loads(self.rfile.read(length) or b"{}")
+        try:
+            body = self.json_body()
+        except BadRequest as e:
+            return self.send_json(e.status, {"error": str(e)})
         t0 = time.time()
         try:
             if url.path == "/api/remember":
