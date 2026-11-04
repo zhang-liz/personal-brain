@@ -49,16 +49,19 @@ server = MCPServer("personal-brain", version=__version__, instructions=(
 
 @server.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False))
 def remember(name: str, company: str = "", event: str = "", note: str = "",
-             person_id: str = "", new_person: bool = False) -> dict:
+             person_id: str = "", new_person: bool = False, on: str = "",
+             ended_jobs: list[str] | None = None) -> dict:
     """Save that the user met someone. Pull the fields out of what the user said.
 
     name: the person's full name. company: where they work now. event: where you met.
-    note: what you talked about, in the user's words.
+    note: what you talked about, in the user's words. on: the day you met, YYYY-MM-DD, if it was not today.
     It matches the name, typos included, to people already in the graph. If it is not sure which person it is, it saves
     nothing and returns candidates: ask the user, then call again with person_id (from the candidates)
-    or new_person=true. A new company ends their old job and keeps it in their history.
+    or new_person=true. A new company ends their old job and keeps it in their history. If they have several
+    current jobs, it saves nothing and returns status needs_jobs: ask the user which ended, then call again with
+    ended_jobs (an empty list if none ended). Calling again with the same values saves nothing: status already_saved.
     The reply has an undo command. Only the user can run it: you cannot delete anything."""
-    return answer(memory.remember, name, company, event, note, person_id, new_person)
+    return answer(memory.remember, name, company, event, note, person_id, new_person, on, ended_jobs)
 
 
 @server.tool(annotations=ToolAnnotations(read_only_hint=True))
