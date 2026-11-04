@@ -230,8 +230,45 @@ def run_jobs(g):
     memory.forget(g, "note", r["note_id"])
 
 
+def run_about(g):
+    """Find people by what they do or what you talked about, not only by name."""
+    def people(text):
+        return {p["name"]: p for p in memory.about(g, text)["people"]}
+
+    memory.remember(g, "Topical Tom", company="Tom Co", note="Talked about vector databases over email", new_person=True)
+    g.query("CREATE (p:Person {id: 'hl', name: 'Headline Hana', search: 'headline hana', headline: 'Head of Quokka Robotics', company: ''})"
+            " CREATE (p)-[:HAS_SKILL]->(:Skill {id: 'zigzag', name: 'Zigzag Welding'})"
+            " CREATE (p)-[:INTO]->(:Topic {id: 'zebra studies', name: 'Zebra Studies'})")
+
+    tom = people("vector databases")
+    check("Topical Tom" in tom and tom["Topical Tom"]["why"][0]["from"] == "note", "about finds words in a note, and says so")
+    check("vector databases" in tom["Topical Tom"]["why"][0]["text"], "about shows the words it matched")
+    check(tom["Topical Tom"]["works_at"] == ["Tom Co"] and tom["Topical Tom"]["id"], "about gives the id and the job")
+    check("Topical Tom" in people("DATABASE vector"), "about: any order, any case, and word starts match")
+    check("Topical Tom" not in people("ai"), "about: 'ai' does not match inside 'email'")
+    check("Topical Tom" not in people("vector robots"), "about: every word must match")
+    check(people("quokka robotics")["Headline Hana"]["why"][0]["from"] == "headline", "about finds words in a headline")
+    check(people("zigzag")["Headline Hana"]["why"][0] == {"from": "skill", "text": "Zigzag Welding"}, "about finds a skill")
+    check(people("zebra")["Headline Hana"]["why"][0] == {"from": "topic", "text": "Zebra Studies"}, "about finds a topic")
+
+    memory.remember(g, "Quokka Note Nia", note="Runs quokka robotics at a zoo", new_person=True)
+    check(memory.about(g, "quokka robotics")["people"][0]["name"] == "Quokka Note Nia", "about: your own notes come first")
+
+    memory.remember(g, "图 专家", note="讨论了图数据库", new_person=True)
+    check("图 专家" in people("数据库"), "about finds words inside non-Latin text")
+
+    for i in range(25):
+        g.query("CREATE (:Person {id: $id, name: $name, search: $name, headline: 'Wombat Wrangler', company: ''})",
+                {"id": f"w{i}", "name": f"wombat person {i}"})
+    r = memory.about(g, "wombat")
+    check(r["found"] == 25 and len(r["people"]) == 20, "about shows 20 people and says how many it found")
+    check(memory.about(g, "no such words here") == {"found": 0, "people": []}, "about: no match")
+    check(refused(memory.about, g, "   "), "about: empty words are refused")
+
+
 def run(g):
     run_names(g)
+    run_about(g)
     run_forget(g)
     run_dates(g)
     run_repeats(g)
