@@ -3,7 +3,7 @@
 Reads data/viewer/graph.json (from export_graph.py), runs igraph's DrL layout
 in 2D and 3D, and writes the positions back into the same file.
 
-    .venv/bin/python spike/layout_graph.py
+    .venv/bin/python src/layout_graph.py
 """
 
 import json

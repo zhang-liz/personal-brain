@@ -39,7 +39,7 @@ You need Python 3.10 or newer. Check with `python3 --version`. macOS comes with 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp .env.example .env            # paste your FalkorDB Cloud URL into FALKORDB_URL
-.venv/bin/python spike/load_graph.py --sample --cloud
+.venv/bin/python src/load_graph.py --sample --cloud
 ```
 
 A free [FalkorDB Cloud](https://app.falkordb.cloud/) instance is the fastest start. To run FalkorDB locally instead, start it with Docker and leave out `--cloud`:
@@ -57,7 +57,7 @@ Then open Claude Code in this folder. It finds `.mcp.json` and asks to start the
 
 ## Use it as your agent's memory (MCP)
 
-`spike/mcp_server.py` gives your agent four tools on one graph:
+`src/mcp_server.py` gives your agent four tools on one graph:
 
 | Tool | What it does |
 |---|---|
@@ -66,7 +66,7 @@ Then open Claude Code in this folder. It finds `.mcp.json` and asks to start the
 | `ask` | Runs a read-only Cypher query (FalkorDB refuses writes), with a 5 second limit and at most 50 rows. The tool description carries the schema. |
 | `forget` | Forgets one note and everything it added, one relationship, or one person. A forgotten person stays out of future rebuilds. |
 
-Every write hangs off a `Note` node, so you can trace each fact to the note that made it. Claude Code reads `.mcp.json`, from this folder or any folder inside it. For another client, give full paths: command `/path/to/personal-brain/.venv/bin/python`, argument `/path/to/personal-brain/spike/mcp_server.py` (stdio). `PB_GRAPH` picks the graph (default `network`). Windows is not tested: `.mcp.json` will not work there, so use full paths, with `.venv\Scripts\python.exe`.
+Every write hangs off a `Note` node, so you can trace each fact to the note that made it. Claude Code reads `.mcp.json`, from this folder or any folder inside it. For another client, give full paths: command `/path/to/personal-brain/.venv/bin/python`, argument `/path/to/personal-brain/src/mcp_server.py` (stdio). `PB_GRAPH` picks the graph (default `network`). Windows is not tested: `.mcp.json` will not work there, so use full paths, with `.venv\Scripts\python.exe`.
 
 If FalkorDB is not running, the server still starts, and each tool says how to start it.
 
@@ -143,22 +143,22 @@ Then leave out `--cloud` in the commands below.
 **3. Build the graph and the viewer data.**
 
 ```bash
-.venv/bin/python spike/load_graph.py --cloud
-.venv/bin/python spike/export_graph.py --cloud
-.venv/bin/python spike/layout_graph.py --dims=2
-.venv/bin/python spike/export_stories.py --cloud
-.venv/bin/python spike/export_shortlists.py --cloud
+.venv/bin/python src/load_graph.py --cloud
+.venv/bin/python src/export_graph.py --cloud
+.venv/bin/python src/layout_graph.py --dims=2
+.venv/bin/python src/export_stories.py --cloud
+.venv/bin/python src/export_shortlists.py --cloud
 ```
 
 **4. Open it.**
 
 ```bash
-./spike/serve_viewer.sh
+./src/serve_viewer.sh
 ```
 
 Open http://127.0.0.1:8765 (shortlists: http://127.0.0.1:8765/shortlists.html). Keys: `2` / `3` switch views, `T` time-lapse, `B` big bang, `D` demo, `Esc` reset.
 
-To explore in the FalkorDB Browser instead, see `spike/demo_queries.cypher`.
+To explore in the FalkorDB Browser instead, see `src/demo_queries.cypher`.
 
 ## Your data stays yours
 
@@ -171,25 +171,25 @@ To explore in the FalkorDB Browser instead, see `spike/demo_queries.cypher`.
 
 | Path | What it does |
 |---|---|
-| `spike/load_graph.py` | Builds the FalkorDB graph and all inferred links |
-| `spike/export_graph.py` | Exports every node and edge to `data/viewer/graph.json` |
-| `spike/layout_graph.py` | Precomputes the layout |
-| `spike/export_stories.py` | The "Ask the graph" questions and their Cypher |
-| `spike/export_shortlists.py` | Ranked shortlists: co-hosts & sponsors, podcast guests, places to speak |
-| `spike/viewer/shortlists.html` | The shortlists page (filter, download CSV) |
-| `spike/server.py` | Serves the viewer and the live Remember / Forget API |
-| `spike/memory.py` | The memory itself: remember, find, ask, forget (used by the MCP server and the viewer) |
-| `spike/mcp_server.py` | The MCP server for Claude Code and other agents |
+| `src/load_graph.py` | Builds the FalkorDB graph and all inferred links |
+| `src/export_graph.py` | Exports every node and edge to `data/viewer/graph.json` |
+| `src/layout_graph.py` | Precomputes the layout |
+| `src/export_stories.py` | The "Ask the graph" questions and their Cypher |
+| `src/export_shortlists.py` | Ranked shortlists: co-hosts & sponsors, podcast guests, places to speak |
+| `src/viewer/shortlists.html` | The shortlists page (filter, download CSV) |
+| `src/server.py` | Serves the viewer and the live Remember / Forget API |
+| `src/memory.py` | The memory itself: remember, find, ask, forget (used by the MCP server and the viewer) |
+| `src/mcp_server.py` | The MCP server for Claude Code and other agents |
 | `.mcp.json` | Tells Claude Code how to start the MCP server |
 | `tests/test_memory.py` | End-to-end check of the memory tools on a throwaway graph |
 | `tests/test_mcp_server.py` | End-to-end check of the MCP server over stdio |
 | `sample_data/` | The made-up sample network |
 | `scripts/make_sample_data.py` | Writes `sample_data/` |
-| `spike/viewer/index.html` | The WebGL viewer (three.js r170, MIT, vendored) |
-| `spike/demo_queries.cypher` | Queries to paste into the FalkorDB Browser |
+| `src/viewer/index.html` | The WebGL viewer (three.js r170, MIT, vendored) |
+| `src/demo_queries.cypher` | Queries to paste into the FalkorDB Browser |
 
 This is a demo-quality build made at a hackathon, not a product.
 
 ## License
 
-MIT, see [LICENSE](LICENSE). three.js in `spike/viewer/vendor/` is MIT too (its own LICENSE file).
+MIT, see [LICENSE](LICENSE). three.js in `src/viewer/vendor/` is MIT too (its own LICENSE file).

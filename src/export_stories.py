@@ -3,7 +3,7 @@
 Each story is a Cypher query. We store the query text, FalkorDB's run time, and
 the node ids it touched, so the viewer can light them up.
 
-    .venv/bin/python spike/export_stories.py --cloud
+    .venv/bin/python src/export_stories.py --cloud
 """
 
 import json
