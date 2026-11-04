@@ -230,6 +230,9 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
     if not name and not person_id:
         raise ValueError("Give a name, or a person_id from find.")
     day = meeting_date(on)
+    # A save that stopped halfway, when the connection dropped, must not confuse this one.
+    for (half_saved,) in g.ro_query("MATCH (n:Note {saving: true}) RETURN n.id").result_set:
+        forget_note(g, half_saved)
     person, candidates = resolve(g, name, company, person_id, new_person)
     if person is None:
         return {"status": "needs_choice", "candidates": candidates,
@@ -264,47 +267,59 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
         ms += r.run_time_ms
         return r.result_set
 
-    q("MATCH (me:Me) CREATE (me)-[:WROTE]->(:Note {id: $nid, text: $text, on: $day, source: 'agent', key: $key})", text=text, key=key)
-    if person["new"]:
-        # The note's text stays on the Note, so forgetting the note removes it. The job step below sets the company.
-        q("CREATE (:Person {id: $pid, name: $name, search: $search, company: '', headline: '',"
-          " source: 'agent', note: $nid, messages: 0, enriched: false, event_contact: $ec})",
-          name=person["name"], search=fold(person["name"]), ec=bool(EVENT_ROLE_RE.search(note)))
-        changes.append(f"new person: {person['name']}")
-    q("MATCH (me:Me), (n:Note {id: $nid}), (p:Person {id: $pid})"
-      " CREATE (n)-[:ABOUT]->(p), (me)-[:MET {on: $day, note: $nid}]->(p)")
+    def save():
+        q("MATCH (me:Me) CREATE (me)-[:WROTE]->(:Note {id: $nid, text: $text, on: $day, source: 'agent', saving: true})", text=text)
+        if person["new"]:
+            # The note's text stays on the Note, so forgetting the note removes it. The job step below sets the company.
+            q("CREATE (:Person {id: $pid, name: $name, search: $search, company: '', headline: '',"
+              " source: 'agent', note: $nid, messages: 0, enriched: false, event_contact: $ec})",
+              name=person["name"], search=fold(person["name"]), ec=bool(EVENT_ROLE_RE.search(note)))
+            changes.append(f"new person: {person['name']}")
+        q("MATCH (me:Me), (n:Note {id: $nid}), (p:Person {id: $pid})"
+          " CREATE (n)-[:ABOUT]->(p), (me)-[:MET {on: $day, note: $nid}]->(p)")
 
-    if company:
-        q("MERGE (c:Company {id: $cid})"
-          " ON CREATE SET c.name = $company, c.search = $search, c.source = 'agent', c.note = $nid",
-          cid=cid, company=company, search=fold(company))
-        if new_job:
-            # A new job: end the old ones instead of deleting them, so the history stays.
-            q("MATCH (p:Person {id: $pid}), (n:Note {id: $nid}) SET n.prev_company = coalesce(p.company, '')")
-            q("MATCH (p:Person {id: $pid})-[w:WORKED_AT {current: true}]->(c:Company) WHERE c.id IN $ended"
-              " SET w.current = false, w.ended_on = $day, w.ended_by = $nid", ended=ended)
-            q("MATCH (p:Person {id: $pid}), (c:Company {id: $cid})"
-              " CREATE (p)-[:WORKED_AT {current: true, since: $day, source: 'agent', note: $nid}]->(c)"
-              " SET p.company = $company, p.headline = CASE WHEN p.source = 'agent' THEN $company ELSE p.headline END",
-              cid=cid, company=company)
-            names = ", ".join(n for c, n in now if c in ended)
-            changes.append(f"works at {company} now" + (f" (ended: {names})" if names else ""))
+        if company:
+            q("MERGE (c:Company {id: $cid})"
+              " ON CREATE SET c.name = $company, c.search = $search, c.source = 'agent', c.note = $nid",
+              cid=cid, company=company, search=fold(company))
+            if new_job:
+                # A new job: end the old ones instead of deleting them, so the history stays.
+                q("MATCH (p:Person {id: $pid}), (n:Note {id: $nid}) SET n.prev_company = coalesce(p.company, '')")
+                q("MATCH (p:Person {id: $pid})-[w:WORKED_AT {current: true}]->(c:Company) WHERE c.id IN $ended"
+                  " SET w.current = false, w.ended_on = $day, w.ended_by = $nid", ended=ended)
+                q("MATCH (p:Person {id: $pid}), (c:Company {id: $cid})"
+                  " CREATE (p)-[:WORKED_AT {current: true, since: $day, source: 'agent', note: $nid}]->(c)"
+                  " SET p.company = $company, p.headline = CASE WHEN p.source = 'agent' THEN $company ELSE p.headline END",
+                  cid=cid, company=company)
+                names = ", ".join(n for c, n in now if c in ended)
+                changes.append(f"works at {company} now" + (f" (ended: {names})" if names else ""))
 
-    if event:
-        same = [m for m in find(g, event, "Event", 5) if fold(m["name"]) == fold(event)]
-        eid = same[0]["id"] if same else "note-" + (norm(event) or event).replace(" ", "-")
-        q("MERGE (e:Event {id: $eid})"
-          " ON CREATE SET e.name = $event, e.search = $search, e.date = $day, e.confirmed = true,"
-          " e.source = 'agent', e.note = $nid"
-          " WITH e MATCH (me:Me), (p:Person {id: $pid})"
-          " MERGE (me)-[a:ATTENDED]->(e) ON CREATE SET a.note = $nid"
-          " CREATE (p)-[:MET_AT {on: $day, inferred: false, note: $nid}]->(e)",
-          eid=eid, event=event, search=fold(event))
-        changes.append(f"met at {same[0]['name'] if same else event}")
+        if event:
+            same = [m for m in find(g, event, "Event", 5) if fold(m["name"]) == fold(event)]
+            eid = same[0]["id"] if same else "note-" + (norm(event) or event).replace(" ", "-")
+            q("MERGE (e:Event {id: $eid})"
+              " ON CREATE SET e.name = $event, e.search = $search, e.date = $day, e.confirmed = true,"
+              " e.source = 'agent', e.note = $nid"
+              " WITH e MATCH (me:Me), (p:Person {id: $pid})"
+              " MERGE (me)-[a:ATTENDED]->(e) ON CREATE SET a.note = $nid"
+              " CREATE (p)-[:MET_AT {on: $day, inferred: false, note: $nid}]->(e)",
+              eid=eid, event=event, search=fold(event))
+            changes.append(f"met at {same[0]['name'] if same else event}")
 
-    for topic in [t for t, rx in TOPIC_RE.items() if rx.search(note)]:
-        q("MATCH (p:Person {id: $pid}), (t:Topic {id: $t}) MERGE (p)-[i:INTO]->(t) ON CREATE SET i.note = $nid", t=topic)
-        changes.append(f"into {topic}")
+        for topic in [t for t, rx in TOPIC_RE.items() if rx.search(note)]:
+            q("MATCH (p:Person {id: $pid}), (t:Topic {id: $t}) MERGE (p)-[i:INTO]->(t) ON CREATE SET i.note = $nid", t=topic)
+            changes.append(f"into {topic}")
+        # Last step: only a full save has a key, so a retry after a failure saves again.
+        q("MATCH (n:Note {id: $nid}) SET n.key = $key, n.saving = NULL", key=key)
+
+    try:
+        save()
+    except Exception:
+        try:
+            forget_note(g, nid)
+        except Exception:
+            pass    # the connection is still down: the next remember cleans up
+        raise
 
     return {"status": "saved", "note_id": nid, "person": person, "changes": changes, "ms": round(ms, 2),
             "undo": f"personal-brain forget note {nid}"}
