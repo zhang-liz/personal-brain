@@ -18,6 +18,8 @@ from pathlib import Path
 
 from falkordb import FalkorDB
 
+from load_graph import norm
+
 PROJECT = Path(__file__).resolve().parent.parent
 OUT = Path(os.environ.get("PB_VIEWER_DIR", PROJECT / "data" / "viewer"))
 SETTINGS = PROJECT / "my_brain.json"
@@ -55,7 +57,7 @@ def connect():
 def competitors():
     """Companies you would not co-host with (my_brain.json "competitors"), normalized."""
     s = json.loads(SETTINGS.read_text()) if SETTINGS.exists() else {}
-    return {re.sub(r"[^a-z0-9]+", " ", c.lower()).strip() for c in s.get("competitors", [])}
+    return {norm(c) for c in s.get("competitors", [])}
 
 
 def main():
