@@ -71,6 +71,7 @@ def no_database():
     tools = [t["name"] for t in server.request("tools/list")["result"]["tools"]]
     check(sorted(tools) == ["ask", "find", "remember"], "no database: server starts and lists its tools, none deletes")
     check(bool(server.info.get("version")), "server reports a version")
+    check("falkordb_data:/var/lib/falkordb/data" in server.call("find", name="Anyone")["error"], "the start command keeps data in a volume")
     # Clients may show only tool descriptions, so each tool that returns other people's text says this too.
     described = {t["name"]: t["description"] for t in server.request("tools/list")["result"]["tools"]}
     for tool in ["find", "ask"]:
@@ -102,6 +103,9 @@ def local_database():
         moved = server.call("remember", name="", person_id=saved["person"]["id"], company="Side Works", ended_jobs=[])
         rows = server.call("ask", cypher="MATCH (:Person {name: 'Stdio Sam'})-[:WORKED_AT {current: true}]->(c) RETURN c.name ORDER BY c.name")["rows"]
         check(moved["status"] == "saved" and rows == [["Pipe Works"], ["Side Works"]], "remember takes ended_jobs over stdio")
+        fact = server.call("remember", name="", person_id=saved["person"]["id"], title="Head of Pipes", location="Berlin", email="sam@example.com")
+        found = server.call("find", name="Stdio Sam", label="Person")[0]
+        check(fact["status"] == "saved" and found["title"] == "Head of Pipes" and found["email"] == "sam@example.com", "remember takes title, location and email over stdio")
         about = server.call("find", about="stdio")
         check(about["people"][0]["name"] == "Stdio Sam", "find about words over stdio")
         check("name or about" in server.call("find")["error"], "find with nothing: says what to pass")

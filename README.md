@@ -38,7 +38,7 @@ The made-up sample network has 241 invented people, startups and events, in the 
 **1. Start FalkorDB.** Run it in Docker, or see [FalkorDB Cloud](#falkordb-cloud):
 
 ```bash
-docker run -p 6379:6379 -p 3000:3000 -it --rm falkordb/falkordb:latest
+docker run -p 6379:6379 -p 3000:3000 -v falkordb_data:/var/lib/falkordb/data -it --rm falkordb/falkordb:latest
 ```
 
 **2. Load the sample, and add the server to Claude Code:**
@@ -75,7 +75,7 @@ Or put `FALKORDB_URL=...` in `~/.personal-brain/.env`.
 
 | Tool | What it does |
 |---|---|
-| `remember` | Saves who you met, where they work and where you met. Matches the name to people already in the graph. When it is not sure which person you mean, it saves nothing and asks. A new company ends the old job and keeps it in the history. If the person has several current jobs, it asks which ended. The same call twice saves one meeting. Say when you met if it was not today. |
+| `remember` | Saves who you met, where they work, where you met, and their title, city and email. To correct a fact, say so: it replaces the old value. "Kestrel" and "Kestrel Inc." are one company, and a typo in an event name finds the same event. Matches the name to people already in the graph. When it is not sure which person you mean, it saves nothing and asks. A new company ends the old job and keeps it in the history. If the person has several current jobs, it asks which ended. The same call twice saves one meeting. Say when you met if it was not today. |
 | `find` | Finds people, companies and events by name, in any script, typos and missing accents included. With `about`, finds people by words in your notes, their topics, skills and headlines, such as "who did I talk to about agent memory?", and says why each one matches. |
 | `ask` | Runs a read-only Cypher query (FalkorDB refuses writes), with a 5 second limit and at most 50 rows. The tool description carries the schema. |
 
@@ -87,7 +87,7 @@ uvx personal-brain forget person "Name"     # a person and every note about them
 uvx personal-brain forget all-notes         # every note and everything they added, to clear a live demo
 ```
 
-Every write hangs off a `Note` node, so you can trace each fact to the note that made it. Running `personal-brain load` again with a new LinkedIn export keeps your notes and what they added. If the new import has the same fact, the import wins. `--force` drops your notes. `PB_GRAPH` picks the graph (default `network`). If FalkorDB is not running, the server still starts, and each tool says how to start it. On Windows, CI checks that it installs and that the server starts. It does not run with a database there, because the runners cannot run FalkorDB.
+Every write hangs off a `Note` node, so you can trace each fact to the note that made it. Running `personal-brain load` again with a new LinkedIn export keeps your notes and what they added. If the new import has the same fact, the import wins, and someone you saved who is now in the import becomes one person. `--force` drops your notes. `PB_GRAPH` picks the graph (default `network`). If FalkorDB is not running, the server still starts, and each tool says how to start it. On Windows, CI checks that it installs and that the server starts. It does not run with a database there, because the runners cannot run FalkorDB.
 
 ## How it works
 
@@ -157,7 +157,7 @@ You need Python 3.10 or newer, [uv](https://docs.astral.sh/uv/getting-started/in
 ```bash
 git clone https://github.com/zhang-liz/personal-brain && cd personal-brain
 python3 -m venv .venv && .venv/bin/pip install -e .
-docker run -p 6379:6379 -p 3000:3000 -it --rm falkordb/falkordb:latest
+docker run -p 6379:6379 -p 3000:3000 -v falkordb_data:/var/lib/falkordb/data -it --rm falkordb/falkordb:latest
 ```
 
 Then, in another terminal, run the tests. They use throwaway graphs:
@@ -192,6 +192,7 @@ Then, in another terminal, run the tests. They use throwaway graphs:
 | `src/personal_brain/forget.py` | The `personal-brain forget` command |
 | `src/personal_brain/notes.py` | The `personal-brain notes` command |
 | `src/personal_brain/notes_backup.py` | Keeps your notes through a rebuild |
+| `src/personal_brain/companies.py` | Decides if two company names are the same company |
 | `.mcp.json` | Tells Claude Code how to start the MCP server in a clone |
 | `tests/` | End-to-end checks of the memory tools, the MCP server and the built package, on throwaway graphs |
 | `src/personal_brain/sample_data/` | The made-up sample network |
