@@ -79,7 +79,7 @@ Or put `FALKORDB_URL=...` in `~/.personal-brain/.env`.
 | `find` | Finds people, companies and events by name, in any script, typos and missing accents included. With `about`, finds people by words in your notes, their topics, skills and headlines, such as "who did I talk to about agent memory?", and says why each one matches. |
 | `ask` | Runs a read-only Cypher query (FalkorDB refuses writes), with a 5 second limit and at most 50 rows. The tool description carries the schema. |
 
-No tool deletes, so text hidden in a LinkedIn headline cannot make your agent delete anything. To delete, run the command yourself. It asks first, unless you add `--yes`, and it also updates the viewer's files if you have them:
+No tool deletes, so text hidden in a LinkedIn headline cannot make your agent delete anything. It could still lead an agent to save a fake note, so each tool tells the agent to treat that text as data, and `personal-brain notes` shows what was saved, newest first. No instruction can fully stop this. To delete, run the command yourself. It asks first, unless you add `--yes`, and it also updates the viewer's files if you have them:
 
 ```bash
 uvx personal-brain forget note <id>         # one note and everything it added. remember's reply gives this command
@@ -189,6 +189,7 @@ Then, in another terminal, run the tests. They use throwaway graphs:
 | `src/personal_brain/memory.py` | The memory itself: remember, find, ask, forget (used by the MCP server, the viewer and the forget command) |
 | `src/personal_brain/mcp_server.py` | The MCP server for Claude Code and other agents |
 | `src/personal_brain/forget.py` | The `personal-brain forget` command |
+| `src/personal_brain/notes.py` | The `personal-brain notes` command |
 | `src/personal_brain/notes_backup.py` | Keeps your notes through a rebuild |
 | `.mcp.json` | Tells Claude Code how to start the MCP server in a clone |
 | `tests/` | End-to-end checks of the memory tools, the MCP server and the built package, on throwaway graphs |
