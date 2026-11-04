@@ -222,8 +222,9 @@ const exists = new Uint8Array(CAP_N), typeOf = new Uint8Array(CAP_N), degree = n
 const names = new Array(CAP_N).fill(""), subs = new Array(CAP_N).fill(""), whens = new Array(CAP_N).fill("");
 const edgeTypes = [...graph.types];
 const edgeTypeIndex = (t) => { let i = edgeTypes.indexOf(t); if (i < 0) { edgeTypes.push(t); i = edgeTypes.length - 1; } return i; };
-const labelToType = graph.labels.map((l) => T_IDX[l] ?? 0);
+const labelToType = graph.labels.map((l) => T_IDX[l]);
 graph.nodes.forEach((n, i) => {
+  if (T_IDX[graph.labels[n[0]]] === undefined) return;  // a note, a follow-up or a gap from forget: its place stays empty
   exists[i] = 1; typeOf[i] = labelToType[n[0]]; names[i] = n[1]; subs[i] = n[2]; degree[i] = n[3]; whens[i] = n[4] || "";
 });
 const meIndex = typeOf.findIndex((t, i) => exists[i] && TYPES[t].label === "Me");
@@ -568,7 +569,7 @@ function focusNode(i) {
   stopTimelapse();
   const set = new Uint8Array(CAP_N); set[i] = 1;
   const byType = TYPES.map(() => []);
-  for (const e of edgesOf(i)) { const j = other(e, i); if (!set[j]) { set[j] = 1; byType[typeOf[j]].push(j); } }
+  for (const e of edgesOf(i)) { const j = other(e, i); if (exists[j] && !set[j]) { set[j] = 1; byType[typeOf[j]].push(j); } }
   highlight = { set, mode: "focus", focus: i };
   setActiveStory(null); setPulses([]); hideAsk();
   applyStyle();
@@ -721,8 +722,8 @@ function addGraphData(data) {
   const fresh = [];
   for (const n of data.nodes) {
     const i = n.id;
-    if (i >= CAP_N || exists[i]) continue;
-    exists[i] = 1; typeOf[i] = T_IDX[n.label] ?? 0; names[i] = n.name; subs[i] = n.sub; whens[i] = n.when;
+    if (i >= CAP_N || exists[i] || T_IDX[n.label] === undefined) continue;
+    exists[i] = 1; typeOf[i] = T_IDX[n.label]; names[i] = n.name; subs[i] = n.sub; whens[i] = n.when;
     nN = Math.max(nN, i + 1); fresh.push(i);
   }
   for (const e of data.edges) {
@@ -910,6 +911,51 @@ computeBirths(); updateStats(); renderLayers(); applyStyle();
 fetch(`/api/delta?since=${N0}`, { cache: "no-store" })
   .then((r) => (r.ok ? r.json() : null)).then((d) => { if (d && d.nodes.length) { addGraphData(d); applyStyle(); } })
   .catch(() => { rememberHint.textContent = "Remember needs the demo server (personal-brain view)"; });
+
+// ---------- live: the galaxy lights up as your agent works ----------
+const LIVE_WORDS = { find: "looked up", about: "searched for", ask: "asked about", remember: "saved" };
+const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+function nodesNamed(wanted) {
+  const set = new Set(wanted.map((n) => n.toLowerCase())), found = [];
+  for (let i = 0; i < nN; i++) if (exists[i] && set.has(names[i].toLowerCase())) found.push(i);
+  return found;
+}
+let liveTimer;
+async function showActivity(ev) {
+  if (ev.saved) {
+    const r = await fetch(`/api/delta?since=${N0}`, { cache: "no-store" });
+    if (r.ok) { addGraphData(await r.json()); applyStyle(); }
+  }
+  const lit = nodesNamed(ev.names);
+  const who = ev.names.slice(0, 3).map((n) => `<b>${escapeHtml(n)}</b>`).join(", ");
+  const more = ev.names.length > 3 ? ` and ${ev.names.length - 3} more` : "";
+  showToast(`Your agent ${LIVE_WORDS[ev.tool] || "used"} ${who || "your graph"}${more}`, 3500);
+  // Never take the screen from someone who is looking at a person, a story or the time-lapse.
+  if (!lit.length || timelapse || (highlight && !highlight.live)) return;
+  const set = new Uint8Array(CAP_N); set[meIndex] = 1;
+  lit.forEach((i) => { set[i] = 1; });
+  highlight = { set, mode: "story", live: true };
+  applyStyle();
+  setPulses(lit.map((i) => [meIndex, i]));
+  if (ev.saved) flyTo(targetPos(lit[0]), 420);
+  clearTimeout(liveTimer);
+  liveTimer = setTimeout(() => { if (highlight?.live) clearHighlight(); }, 6000);
+}
+async function followActivity() {
+  let since = -1;
+  for (;;) {
+    let data;
+    try {
+      const r = await fetch(`/api/activity?since=${since}`, { cache: "no-store" });
+      if (!r.ok) return;  // the public demo is plain files, with no server to ask
+      data = await r.json();
+    } catch { return; }
+    since = data.seq;  // this also follows the list back to the start after forget clears it
+    for (const ev of data.events) await showActivity(ev).catch(() => {});
+    await new Promise((done) => setTimeout(done, 1000));
+  }
+}
+followActivity();
 
 let last = performance.now();
 function frame(now) {
