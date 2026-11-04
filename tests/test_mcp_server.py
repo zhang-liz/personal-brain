@@ -69,7 +69,7 @@ class Server:
 def no_database():
     server = from_mcp_json(NO_DATABASE)
     tools = [t["name"] for t in server.request("tools/list")["result"]["tools"]]
-    check(sorted(tools) == ["ask", "find", "forget", "remember"], "no database: server starts and lists its tools")
+    check(sorted(tools) == ["ask", "find", "remember"], "no database: server starts and lists its tools, none deletes")
     check(bool(server.info.get("version")), "server reports a version")
     error = server.call("find", name="Anyone").get("error", "")
     check("FalkorDB" in error and "FALKORDB_URL" in error and "docker run" in error, "no database: a tool says what to do")
@@ -88,11 +88,9 @@ def local_database():
         check(found[0]["id"] == saved["person"]["id"], "find over stdio")
         rows = server.call("ask", cypher="MATCH (p:Person {name: $n}) RETURN p.company", params={"n": "Stdio Sam"})["rows"]
         check(rows == [["Pipe Works"]], "ask over stdio")
-        check(server.call("forget", what="note", id=saved["note_id"]).get("forgot") == "note", "forget over stdio")
+        check(saved.get("undo") == f"personal-brain forget note {saved['note_id']}", "remember says how to undo")
         error = server.call("find", name="Sam", label="Planet")["error"]
         check("Person" in error and "Planet" in error, "unknown label: the error names the choices")
-        error = server.call("forget", what="fact", id="abc")["error"]
-        check("rel_id" in error and "abc" in error, "bad rel_id: the error says what to pass")
     finally:
         server.stop()
         graph.delete()

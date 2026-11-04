@@ -26,7 +26,7 @@ What the viewer does:
 - **Shortlists**: ranked tables (and CSVs) of co-hosts & sponsors, podcast guests, upcoming events to speak at, and organizers you know. Every row says why it ranks there.
 - **Remember**: type "Met Maya from Supabase at AI Engineer Summit, runs developer events" and it is written to FalkorDB live and appears in the galaxy.
 - **Demo mode**: the whole show hands-free (press `D`).
-- **Agent memory (MCP)**: Claude Code, or any MCP client, can find people, ask the graph, remember who you met and forget on request.
+- **Agent memory (MCP)**: Claude Code, or any MCP client, can find people, ask the graph, and remember who you met. It cannot delete anything: only you can, with `personal-brain forget`.
 
 Everything runs on your laptop. The viewer works offline (three.js is vendored).
 
@@ -54,7 +54,6 @@ Try:
 - "Who in my network works at Kestrel Graph?"
 - "Who could introduce me to someone at a well-funded startup?"
 - "I met Oskar Mensah at the Graph & RAG Meetup. He's building agent memory." (There are two Oskar Mensahs, so it asks which one.)
-- "Forget that note."
 
 **Other MCP clients:** use command `uvx`, arguments `personal-brain mcp` (stdio).
 
@@ -72,14 +71,20 @@ Or put `FALKORDB_URL=...` in `~/.personal-brain/.env`.
 
 ## Use it as your agent's memory (MCP)
 
-`uvx personal-brain mcp` gives your agent four tools on one graph:
+`uvx personal-brain mcp` gives your agent three tools on one graph:
 
 | Tool | What it does |
 |---|---|
 | `remember` | Saves who you met, where they work and where you met. Matches the name to people already in the graph. When it is not sure which person you mean, it saves nothing and asks. A new company ends the old job and keeps it in the history. |
 | `find` | Finds people, companies and events by name, in any script, typos and missing accents included. |
 | `ask` | Runs a read-only Cypher query (FalkorDB refuses writes), with a 5 second limit and at most 50 rows. The tool description carries the schema. |
-| `forget` | Forgets one note and everything it added, one relationship, or one person. A forgotten person stays out of future rebuilds. |
+
+No tool deletes, so text hidden in a LinkedIn headline cannot make your agent delete anything. To delete, run the command yourself. It asks first, unless you add `--yes`:
+
+```bash
+uvx personal-brain forget note <id>         # one note and everything it added. remember's reply gives this command
+uvx personal-brain forget person "Name"     # a person and every note about them. They stay out of future rebuilds
+```
 
 Every write hangs off a `Note` node, so you can trace each fact to the note that made it. `PB_GRAPH` picks the graph (default `network`). If FalkorDB is not running, the server still starts, and each tool says how to start it. Windows is not tested.
 
@@ -183,8 +188,9 @@ Then, in another terminal, run the tests. They use throwaway graphs:
 | `src/personal_brain/export_shortlists.py` | Ranked shortlists: co-hosts & sponsors, podcast guests, places to speak |
 | `src/personal_brain/viewer/shortlists.html` | The shortlists page (filter, download CSV) |
 | `src/personal_brain/server.py` | Serves the viewer and the live Remember / Forget API |
-| `src/personal_brain/memory.py` | The memory itself: remember, find, ask, forget (used by the MCP server and the viewer) |
+| `src/personal_brain/memory.py` | The memory itself: remember, find, ask, forget (used by the MCP server, the viewer and the forget command) |
 | `src/personal_brain/mcp_server.py` | The MCP server for Claude Code and other agents |
+| `src/personal_brain/forget.py` | The `personal-brain forget` command |
 | `.mcp.json` | Tells Claude Code how to start the MCP server in a clone |
 | `tests/` | End-to-end checks of the memory tools, the MCP server and the built package, on throwaway graphs |
 | `src/personal_brain/sample_data/` | The made-up sample network |
