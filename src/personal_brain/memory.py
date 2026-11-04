@@ -17,14 +17,17 @@ from pathlib import Path
 
 from falkordb import FalkorDB, Edge, Node, Path as GraphPath
 
-from personal_brain.load_graph import EVENT_ROLE_RE, FORGOTTEN, TOPIC_RE, create_search_indexes, fold, norm
+from personal_brain.companies import core, one_edit, same_company
+from personal_brain.load_graph import EVENT_ROLE_RE, FORGOTTEN, TOPIC_RE, city_of, create_search_indexes, fold, norm
 
 from personal_brain.paths import HOME, env_file_url
 MAX_ROWS = 50        # rows ask() hands back to the agent
 TIMEOUT_MS = 5000    # longest an ask() query may run
 
+FIELDS = ("title", "location", "email")    # facts remember can set or correct on a person
+
 SCHEMA = """Nodes: Me (you), Person, Company, School, Skill, Topic, Event, Investor, City, Note.
-Every node has id and name. Person: headline, title, company, location, connected_on, messages.
+Every node has id and name. Person: headline, title, company, location, email, connected_on, messages.
 Company: well_funded, funding, employees. Event: date, upcoming, summary, url.
 Edges:
 (Me)-[:CONNECTED {on}]->(Person)
@@ -36,6 +39,7 @@ Edges:
 (Company)-[:FUNDED_BY {lead, round}]->(Investor)
 (Event {upcoming: true})-[:HOSTED_BY {via}]->(Person or Company), (Event)-[:ABOUT]->(Topic), (Event)-[:HELD_IN]->(City)
 (Me)-[:WROTE]->(Note {text, on})-[:ABOUT]->(Person), (Me)-[:MET {on, note}]->(Person)
+People you met may be MET but not CONNECTED: for "my network", match both.
 Topics: AI Agents, Agent Memory, Knowledge Graphs, RAG & Search, LLMs & GenAI, Developer Relations,
 Community & Events, Partnerships, Investing, Founder, Podcast & Media."""
 
@@ -75,7 +79,8 @@ def search_query(text):
 FIND = {
     "Person": "OPTIONAL MATCH (node)-[:WORKED_AT {current: true}]->(c:Company) "
               "WITH node, score, collect(c.name) AS now "
-              "RETURN node.id, node.name, score, {headline: node.headline, works_at: now, connected_on: node.connected_on}",
+              "RETURN node.id, node.name, score, {headline: node.headline, works_at: now, connected_on: node.connected_on,"
+              " title: node.title, location: node.location, email: node.email}",
     "Company": "OPTIONAL MATCH (node)<-[:WORKED_AT {current: true}]-(p:Person) "
                "WITH node, score, count(p) AS people "
                "RETURN node.id, node.name, score, {people_you_know_there: people, funding: node.funding}",
@@ -139,16 +144,6 @@ def about(g, text):
 
 # ---------- remember ----------
 
-def one_edit(a, b):
-    """True when b is a with at most one letter added, dropped or changed."""
-    if abs(len(a) - len(b)) > 1:
-        return False
-    i = 0
-    while i < min(len(a), len(b)) and a[i] == b[i]:
-        i += 1
-    return a[i + 1:] == b[i + 1:] or a[i:] == b[i + 1:] or a[i + 1:] == b[i:]
-
-
 def close(a, b):
     """Same name give or take accents, case and 1 typo per word of 4+ letters (the rule find uses)."""
     wa, wb = fold(a).split(), fold(b).split()
@@ -175,8 +170,7 @@ def resolve(g, name, company, person_id, new_person):
         jobs = dict(g.ro_query("MATCH (p:Person) WHERE p.id IN $ids OPTIONAL MATCH (p)-[:WORKED_AT]->(c:Company) "
                                "RETURN p.id, collect(c.id)", {"ids": [m["id"] for m in same]}).result_set)
         key = norm(company)
-        at = [m for m in same if any(c == key or c.startswith(key + " ") or key.startswith(c + " ")
-                                     for c in jobs.get(m["id"], []))]
+        at = [m for m in same if any(same_company(c, key) for c in jobs.get(m["id"], []))]
         if len(at) == 1:
             return {"id": at[0]["id"], "name": at[0]["name"], "new": False}, None
     elif len(same) == 1:
@@ -198,9 +192,9 @@ def meeting_date(on):
     return day.isoformat()
 
 
-def repeat_key(company, event, text, day):
+def repeat_key(company, event, text, day, fields):
     """Two notes with this key about one person are one meeting saved twice, from an agent's retry."""
-    return hashlib.sha256(json.dumps([fold(company), fold(event), fold(text), day]).encode()).hexdigest()[:16]
+    return hashlib.sha256(json.dumps([fold(company), fold(event), fold(text), day, sorted(fields.items())]).encode()).hexdigest()[:16]
 
 
 def saved_before(g, key, person, company, event, note):
@@ -226,11 +220,71 @@ def jobs_that_ended(now, ended_jobs, name):
     return ended
 
 
-def remember(g, name, company="", event="", note="", person_id="", new_person=False, on="", ended_jobs=None):
-    """Save one meeting: who, where they work, where you met, what you talked about, and when."""
-    name, company, event, note = (" ".join((x or "").split()) for x in (name, company, event, note))
+def same_event(a, b):
+    """Same event give or take "and" and "&", case, accents and 1 typo per word of 4+ letters. A year must match exactly."""
+    wa, wb = event_words(a), event_words(b)
+    return len(wa) == len(wb) and all(
+        x == y or (min(len(x), len(y)) >= 4 and not any(c.isdigit() for c in x + y) and one_edit(x, y)) for x, y in zip(wa, wb))
+
+
+def event_words(name):
+    return [w for w in fold(name).split() if w != "and"]
+
+
+def set_fields(q, fields, company_id, now):
+    """Title, city and email go on the person. Each note keeps what it replaced, so forgetting it brings that back."""
+    for field, value in fields.items():
+        if field == "location":
+            cities = [c for (c,) in q("MATCH (:Person {id: $pid})-[:LIVES_IN]->(c:City) RETURN c.id")]
+            q("MATCH (n:Note {id: $nid}) SET n.prev_cities = $cities", cities=cities)
+            q("MATCH (:Person {id: $pid})-[r:LIVES_IN]->() DELETE r")
+            city = city_of(value, ())
+            if city:
+                q("MERGE (c:City {id: $cid}) ON CREATE SET c.name = $city, c.source = 'agent', c.note = $nid"
+                  " WITH c MATCH (p:Person {id: $pid}) CREATE (p)-[:LIVES_IN {note: $nid}]->(c)", cid=norm(city), city=city)
+        q(f"MATCH (n:Note {{id: $nid}}), (p:Person {{id: $pid}})"
+          f" SET n.prev_{field} = coalesce(p.{field}, ''), n.prev_{field}_note = coalesce(p.{field}_note, ''),"
+          f" n.set_{field} = true, p.{field} = $value, p.{field}_note = $nid", value=value)
+    job = company_id or (now[0][0] if len(now) == 1 else "")
+    if "title" in fields and job:
+        q("MATCH (:Person {id: $pid})-[w:WORKED_AT {current: true}]->(:Company {id: $job})"
+          " SET w.prev_title = CASE WHEN w.title_note IS NULL THEN coalesce(w.title, '') ELSE w.prev_title END,"
+          " w.title = $title, w.title_note = $nid", job=job, title=fields["title"])
+
+
+def undo_fields(g, nid, note, pid):
+    """Put back what this note replaced. If a later note replaced it again, that later note now remembers the older value."""
+    for field in FIELDS:
+        if not note.get(f"set_{field}"):
+            continue
+        before, before_note = note.get(f"prev_{field}"), note.get(f"prev_{field}_note")
+        later = g.ro_query(f"MATCH (m:Note {{prev_{field}_note: $nid}}) RETURN m.id", {"nid": nid}).result_set
+        if later:
+            g.query(f"MATCH (m:Note {{id: $later}}) SET m.prev_{field} = $before, m.prev_{field}_note = $before_note"
+                    + (", m.prev_cities = $cities" if field == "location" else ""),
+                    {"later": later[0][0], "before": before, "before_note": before_note, "cities": note.get("prev_cities", [])})
+            continue
+        g.query(f"MATCH (p:Person {{id: $pid}}) SET p.{field} = $before, p.{field}_note = $before_note",
+                {"pid": pid, "before": before or None, "before_note": before_note or None})
+        if field == "location":
+            g.query("MATCH (p:Person {id: $pid}), (c:City) WHERE c.id IN $cities CREATE (p)-[r:LIVES_IN]->(c)"
+                    " SET r.note = $before_note",
+                    {"pid": pid, "cities": note.get("prev_cities", []), "before_note": before_note or None})
+    g.query("MATCH (p:Person)-[w:WORKED_AT {title_note: $nid}]->()"
+            " SET w.title = CASE WHEN p.title_note IS NULL THEN w.prev_title ELSE p.title END,"
+            " w.prev_title = CASE WHEN p.title_note IS NULL THEN NULL ELSE w.prev_title END,"
+            " w.title_note = p.title_note", {"nid": nid})
+
+
+def remember(g, name, company="", event="", note="", person_id="", new_person=False, on="", ended_jobs=None,
+             title="", location="", email=""):
+    """Save one meeting (who, where they work, where you met, what you talked about, when), or correct a fact about someone."""
+    name, company, event, note, title, location, email = (
+        " ".join((x or "").split()) for x in (name, company, event, note, title, location, email))
     if not name and not person_id:
         raise ValueError("Give a name, or a person_id from find.")
+    fields = {f: v for f, v in zip(FIELDS, (title, location, email)) if v}
+    met = bool(note or event or company or not fields)    # only title, city or email: a correction, not a meeting
     day = meeting_date(on)
     # A save that stopped halfway, when the connection dropped, must not confuse this one.
     for (half_saved,) in g.ro_query("MATCH (n:Note {saving: true}) RETURN n.id").result_set:
@@ -241,18 +295,28 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
                 "message": f"Not sure who {name} is: these people have the same or a similar name. Ask the user, "
                            "then call remember again with person_id for one of them, or new_person=true for someone new."}
 
-    text = note or " ".join(x for x in [f"Met {person['name']}", company and f"from {company}", event and f"at {event}"] if x)
-    key = repeat_key(company, event, text, day)
-    before = saved_before(g, key, person, company, event, note)
+    if met:
+        text = note or " ".join(x for x in [f"Met {person['name']}", company and f"from {company}", event and f"at {event}"] if x)
+    else:
+        text = "Updated " + ", ".join(f"{f}: {v}" for f, v in fields.items())
+    key = repeat_key(company, event, text, day, fields)
+    before = saved_before(g, key, person, company, event, note or fields)
     if before:
         return {"status": "already_saved", "note_id": before[0], "person": {"id": before[1], "name": before[2], "new": False},
                 "changes": [], "ms": 0.0, "undo": f"personal-brain forget note {before[0]}"}
 
     pid = person["id"]
-    cid = (norm(company) or company) if company else ""    # an emoji has no words: use it as it is
     now = g.ro_query("MATCH (:Person {id: $pid})-[:WORKED_AT {current: true}]->(c:Company) RETURN c.id, c.name",
                      {"pid": pid}).result_set
-    new_job = bool(company) and cid not in {c for c, _ in now}
+    cid = ""
+    if company:
+        said = norm(company) or company    # an emoji has no words: use it as it is
+        same_job = [(c, n) for c, n in now if same_company(c, said)]
+        known = [] if same_job else [(m["id"], m["name"]) for m in find(g, core(said), "Company", 5) if core(norm(m["name"])) == core(said)]
+        cid, company = (same_job or known or [(said, company)])[0]
+        new_job = not same_job
+    else:
+        new_job = False
     if new_job and ended_jobs is None and len(now) > 1:
         jobs = [cname for _, cname in now]
         return {"status": "needs_jobs", "person": person, "current_jobs": jobs,
@@ -277,8 +341,9 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
               " source: 'agent', note: $nid, messages: 0, enriched: false, event_contact: $ec})",
               name=person["name"], search=fold(person["name"]), ec=bool(EVENT_ROLE_RE.search(note)))
             changes.append(f"new person: {person['name']}")
-        q("MATCH (me:Me), (n:Note {id: $nid}), (p:Person {id: $pid})"
-          " CREATE (n)-[:ABOUT]->(p), (me)-[:MET {on: $day, note: $nid}]->(p)")
+        q("MATCH (n:Note {id: $nid}), (p:Person {id: $pid}) CREATE (n)-[:ABOUT]->(p)")
+        if met:
+            q("MATCH (me:Me), (p:Person {id: $pid}) CREATE (me)-[:MET {on: $day, note: $nid}]->(p)")
 
         if company:
             q("MERGE (c:Company {id: $cid})"
@@ -295,9 +360,16 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
                   cid=cid, company=company)
                 names = ", ".join(n for c, n in now if c in ended)
                 changes.append(f"works at {company} now" + (f" (ended: {names})" if names else ""))
+                coworkers = q("MATCH (p:Person {id: $pid}), (o:Person)-[:WORKED_AT {current: true}]->(:Company {id: $cid})"
+                              " WHERE o.id <> $pid AND NOT (p)-[:KNOWS]-(o) WITH p, o LIMIT 400"
+                              " CREATE (p)-[:KNOWS {via: 'coworkers', place: $company, note: $nid}]->(o) RETURN count(o)",
+                              cid=cid, company=company)
+                if coworkers and coworkers[0][0]:
+                    changes.append(f"knows {coworkers[0][0]} coworker{'s' if coworkers[0][0] > 1 else ''}")
 
         if event:
-            same = [m for m in find(g, event, "Event", 5) if fold(m["name"]) == fold(event)]
+            matches = [m for m in find(g, " ".join(event_words(event)) or event, "Event", 5) if same_event(m["name"], event)]
+            same = sorted(matches, key=lambda m: fold(m["name"]) != fold(event))
             eid = same[0]["id"] if same else "note-" + (norm(event) or event).replace(" ", "-")
             q("MERGE (e:Event {id: $eid})"
               " ON CREATE SET e.name = $event, e.search = $search, e.date = $day, e.confirmed = true,"
@@ -311,6 +383,10 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
         for topic in [t for t, rx in TOPIC_RE.items() if rx.search(note)]:
             q("MATCH (p:Person {id: $pid}), (t:Topic {id: $t}) MERGE (p)-[i:INTO]->(t) ON CREATE SET i.note = $nid", t=topic)
             changes.append(f"into {topic}")
+
+        set_fields(q, fields, cid, now)
+        changes.extend(f"{f}: {v}" for f, v in fields.items())
+
         # Last step: only a full save has a key, so a retry after a failure saves again.
         q("MATCH (n:Note {id: $nid}) SET n.key = $key, n.saving = NULL", key=key)
 
@@ -329,12 +405,17 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
 
 # ---------- ask ----------
 
+def shown(key):
+    """Bookkeeping fields stay out of what the agent sees."""
+    return key not in ("search", "key", "saving") and not key.endswith("_note") and not key.startswith(("prev_", "set_"))
+
+
 def plain(v):
     """FalkorDB values as JSON."""
     if isinstance(v, Node):
-        return {"label": (v.labels or [""])[0], **{k: x for k, x in v.properties.items() if k not in ("search", "key")}}
+        return {"label": (v.labels or [""])[0], **{k: x for k, x in v.properties.items() if shown(k)}}
     if isinstance(v, Edge):
-        return {"type": v.relation, **v.properties}
+        return {"type": v.relation, **{k: x for k, x in v.properties.items() if shown(k)}}
     if isinstance(v, GraphPath):
         return {"nodes": [plain(n) for n in v.nodes()], "edges": [plain(e) for e in v.edges()]}
     if isinstance(v, list):
@@ -346,6 +427,7 @@ def plain(v):
 
 def ask(g, cypher, params=None):
     """A read-only Cypher query (GRAPH.RO_QUERY) with a time limit. Writes are refused by FalkorDB itself."""
+    g.schema.clear()    # a rebuild renumbers field names, and this client may be older than the rebuild
     r = g.ro_query(cypher, params or {}, timeout=TIMEOUT_MS)
     return {"columns": [h[1] for h in r.header], "rows": [[plain(v) for v in row] for row in r.result_set[:MAX_ROWS]],
             "row_count": len(r.result_set), "truncated": len(r.result_set) > MAX_ROWS, "ms": round(r.run_time_ms, 2)}
@@ -357,8 +439,11 @@ def forget_note(g, nid):
     """Undo one note: every relationship and node it made, and any job it ended. What other notes say stays."""
     counts = {"jobs_reopened": 0}
     params = {"nid": nid}
-    if not g.ro_query("MATCH (n:Note {id: $nid}) RETURN n", params).result_set:
+    g.schema.clear()    # a rebuild renumbers field names, and this client may be older than the rebuild
+    rows = g.ro_query("MATCH (n:Note {id: $nid}) RETURN n", params).result_set
+    if not rows:
         raise ValueError(f"No note with id {nid}.")
+    note = rows[0][0].properties
     people = [p for (p,) in g.ro_query("MATCH (:Note {id: $nid})-[:ABOUT]->(p:Person) RETURN p.id", params).result_set]
     # Nodes this note made or touched. Each one that came from a note goes once nothing uses it.
     touched = {i for row in g.ro_query("MATCH (a)-[{note: $nid}]->(b) RETURN id(a), id(b)", params).result_set for i in row}
@@ -382,6 +467,8 @@ def forget_note(g, nid):
             " WITH a, collect(m.note)[0] AS other SET a.note = other", params)
 
     counts["facts"] = int(g.query("MATCH ()-[r {note: $nid}]->() DELETE r", params).relationships_deleted)
+    for pid in people:
+        undo_fields(g, nid, note, pid)
     g.query("MATCH (n:Note {id: $nid}) DETACH DELETE n", params)
     for pid in people:
         rebuild_from_notes(g, pid)

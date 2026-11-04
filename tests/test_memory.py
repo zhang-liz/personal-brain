@@ -9,6 +9,7 @@ forget against it, then deletes the graph. Never touches your "network" graph.
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -322,11 +323,174 @@ def run_about(g):
     check(refused(memory.about, g, "   "), "about: empty words are refused")
 
 
-def rebuild(*flags):
+def rebuild(*flags, sample=None):
     """Run load on the test graph, the way you would after a new LinkedIn export."""
+    extra = {"PB_SAMPLE_DIR": str(sample)} if sample else {}
     r = subprocess.run([sys.executable, "-m", "personal_brain.load_graph", "--sample", "--graph", TEST_GRAPH, *flags],
-                       capture_output=True, text=True, env={**os.environ, "PB_HOME": REBUILD_HOME})
+                       capture_output=True, text=True, env={**os.environ, "PB_HOME": REBUILD_HOME, **extra})
     return r
+
+
+def sample_with(*connections):
+    """A copy of the sample network with more rows in Connections.csv, as in a newer LinkedIn export."""
+    sample = Path(tempfile.mkdtemp()) / "sample"
+    shutil.copytree(PROJECT / "src/personal_brain/sample_data", sample)
+    file = sample / "linkedin/Connections.csv"
+    file.write_text(file.read_text(encoding="utf-8").rstrip("\n") + "\n" + "\n".join(connections) + "\n", encoding="utf-8")
+    return sample
+
+
+def run_merge_on_import(g):
+    """Someone you saved first, then a new import has them: one person, with your notes."""
+    def noras(name):
+        return g.ro_query("MATCH (p:Person {name: $n}) RETURN p.id", {"n": name}).result_set
+
+    check(rebuild("--force").returncode == 0, "start from a clean graph")
+    memory.setup(g)
+    saved = memory.remember(g, "Nora Newcomer", company="Kestrel Graph Inc.", event="Merge Meetup", note="saved first", title="CTO", new_person=True)
+    plain = memory.remember(g, "Solo Sol", note="no company given", new_person=True)
+    other = memory.remember(g, "Other Olga", company="Another Company", note="a different Olga", new_person=True)
+    sample = sample_with("Nora,Newcomer,https://www.linkedin.com/in/nora-newcomer,,Kestrel Graph,Engineer,01 Jan 2026",
+                         "Solo,Sol,https://www.linkedin.com/in/solo-sol,,Sol Works,Engineer,01 Jan 2026",
+                         "Other,Olga,https://www.linkedin.com/in/other-olga,,Kestrel Graph,Engineer,01 Jan 2026")
+    r = rebuild(sample=sample)
+    check(r.returncode == 0 and "Merged 2" in r.stdout, "rebuild says how many people it merged" + (": " + (r.stdout + r.stderr)[-300:] if r.returncode or "Merged 2" not in r.stdout else ""))
+    memory.setup(g)
+    check(noras("Nora Newcomer") == [["nora-newcomer"]], "same name and company: one person, with the import's id")
+    check(noras("Solo Sol") == [["solo-sol"]], "same name and no company saved: one person")
+    check(len(noras("Other Olga")) == 2, "same name and another company: stays two people")
+    row = g.ro_query("MATCH (:Me)-[:MET]->(p:Person {id: 'nora-newcomer'})<-[:ABOUT]-(n:Note {id: $id}), (p)-[:MET_AT]->(e:Event {name: 'Merge Meetup'}), (:Me)-[:CONNECTED]->(p)"
+                     " RETURN n.text, p.title", {"id": saved["note_id"]}).result_set
+    check(row == [["saved first", "CTO"]], "the note, the meeting, the event and the title move to the imported person")
+    check(memory.remember(g, "Nora Newcomer", note="after the import")["status"] == "saved", "the next remember does not ask which one")
+    jobs = g.ro_query("MATCH (:Person {id: 'nora-newcomer'})-[:WORKED_AT {current: true}]->(c) RETURN c.name").result_set
+    check(jobs == [["Kestrel Graph"]], "no second job from the note")
+    memory.forget(g, "note", saved["note_id"])
+    check(noras("Nora Newcomer") == [["nora-newcomer"]], "forget the note: the imported person stays")
+    memory.forget(g, "note", plain["note_id"])
+    memory.forget(g, "note", other["note_id"])
+
+
+def run_open_client(g):
+    """A rebuild renumbers field names. A client that was already open, like a running MCP server, must still read them right."""
+    saved = memory.remember(g, "Open Client Olu", title="CTO", location="Oslo", note="open client", new_person=True)
+    g.ro_query("MATCH (n:Note {id: $id}) RETURN n", {"id": saved["note_id"]})    # the client now holds the field names
+    rebuild()
+    note = memory.ask(g, "MATCH (n:Note {id: $id}) RETURN n", {"id": saved["note_id"]})["rows"][0][0]
+    check(note.get("text") == "open client" and note.get("on"), "an open client reads the right fields after a rebuild")
+    memory.forget(g, "note", saved["note_id"])
+    left = g.ro_query("MATCH (p:Person {id: $id}) RETURN p.location", {"id": saved["person"]["id"]}).result_set
+    check(not left or left[0][0] is None, "an open client can forget after a rebuild")
+
+
+def run_company_names(g):
+    """The same company said another way is the same job."""
+    def jobs(pid):
+        return sorted(g.ro_query("MATCH (:Person {id: $id})-[w:WORKED_AT]->(c) RETURN c.name, w.current", {"id": pid}).result_set)
+
+    def companies(name):
+        return g.ro_query("MATCH (c:Company) WHERE toLower(c.name) CONTAINS $n RETURN count(c)", {"n": name}).result_set[0][0]
+
+    g.query("MERGE (c:Company {id: 'lanternfish data'}) ON CREATE SET c.name = 'Lanternfish Data', c.search = 'lanternfish data'"
+            " CREATE (:Person {id: 'lf', name: 'Lena Fisher', search: 'lena fisher', company: 'Lanternfish Data', headline: 'x'})"
+            "-[:WORKED_AT {current: true}]->(c)")
+    for said in ["Lanternfish Data Inc.", "Lanternfish", "lanternfish data", "Lanternfsh Data", "LANTERNFISH DATA LLC"]:
+        r = memory.remember(g, "", person_id="lf", company=said, note=f"said {said}")
+        check(r["status"] == "saved" and jobs("lf") == [["Lanternfish Data", True]] and not any("now" in c for c in r["changes"]),
+              f"{said}: the same job, with no job change")
+    check(companies("lanternfish") == 1, "no second company")
+    r = memory.remember(g, "Lena Fisher", company="Lanternfish Data Inc.", note="by name")
+    check(r["status"] == "saved" and r["person"]["id"] == "lf", "by name with another spelling: the same person, no question")
+    r = memory.remember(g, "Fresh Fran", company="Lanternfish Data, Inc.", note="new person", new_person=True)
+    check(companies("lanternfish") == 1, "a new person joins the existing company")
+    check(memory.find(g, "Fresh Fran", "Person")[0]["works_at"] == ["Lanternfish Data"], "a new person shows the existing company's name")
+
+    r = memory.remember(g, "", person_id="lf", company="Applesauce Labs", note="a real move")
+    check(jobs("lf") == [["Applesauce Labs", True], ["Lanternfish Data", False]], "another company is still a job change")
+    g.query("CREATE (p:Person {id: 'ap', name: 'Abe Pell', search: 'abe pell', company: 'Apple', headline: 'x'})"
+            "-[:WORKED_AT {current: true}]->(:Company {id: 'apple', name: 'Apple', search: 'apple'})")
+    memory.remember(g, "", person_id="ap", company="Apply", note="short names are not typos")
+    check(jobs("ap") == [["Apple", False], ["Apply", True]], "a short name one letter off is another company")
+
+
+def run_event_names(g):
+    """The same event said another way is the same event."""
+    g.query("CREATE (:Event {id: 'gr', name: 'Graph & RAG Meetup', search: 'graph rag meetup', date: '2026-01-01'}), (:Event {id: 'as', name: 'AI Summit 2025', search: 'ai summit 2025', date: '2025-01-01'})")
+
+    def event_of(said, note):
+        r = memory.remember(g, "Event Eve", event=said, note=note)
+        return next(c for c in r["changes"] if c.startswith("met at"))
+
+    memory.remember(g, "Event Eve", new_person=True)
+    for i, said in enumerate(["Graph and RAG Meetup", "Graph RAG Meetup", "graph & rag meetup", "Graph & RAG Meetp"]):
+        check(event_of(said, f"note {i}") == "met at Graph & RAG Meetup", f"{said}: the same event")
+    check(g.ro_query("MATCH (e:Event) WHERE e.name IN ['Graph and RAG Meetup', 'Graph & RAG Meetp'] RETURN count(e)").result_set[0][0] == 0, "no second event")
+    check(event_of("AI Summit 2026", "next year") == "met at AI Summit 2026", "another year is another event")
+    check(event_of("Rooftop Party", "new") == "met at Rooftop Party", "another name is another event")
+
+
+def run_coworkers(g):
+    """Someone new is linked to the people you know at their company."""
+    g.query("CREATE (c:Company {id: 'wren works', name: 'Wren Works', search: 'wren works'})"
+            " CREATE (:Person {id: 'w1', name: 'Wren One', search: 'wren one', company: 'Wren Works', headline: 'x'})-[:WORKED_AT {current: true}]->(c)"
+            " CREATE (:Person {id: 'w2', name: 'Wren Two', search: 'wren two', company: 'Wren Works', headline: 'x'})-[:WORKED_AT {current: false}]->(c)")
+    r = memory.remember(g, "Wren Three", company="Wren Works", note="joined", new_person=True)
+    links = g.ro_query("MATCH (:Person {id: $id})-[k:KNOWS]-(o) RETURN o.id, k.via, k.place", {"id": r["person"]["id"]}).result_set
+    check(links == [["w1", "coworkers", "Wren Works"]], "a new person knows current coworkers only")
+    check("knows 1 coworker" in " ".join(r["changes"]), "the reply says so")
+    check("MET" in memory.SCHEMA and "not CONNECTED" in memory.SCHEMA, "the schema says people you met may not be CONNECTED")
+    memory.forget(g, "note", r["note_id"])
+    check(g.ro_query("MATCH (:Person {id: 'w1'})-[k:KNOWS]-() RETURN count(k)").result_set[0][0] == 0, "forget the note: the link goes")
+
+
+def run_facts(g):
+    """Title, city and email are fields, so they can be asked about and corrected."""
+    def person(pid):
+        return g.ro_query("MATCH (p:Person {id: $id}) RETURN p.title, p.location, p.email", {"id": pid}).result_set[0]
+
+    def cities(pid):
+        return sorted(c for (c,) in g.ro_query("MATCH (:Person {id: $id})-[:LIVES_IN]->(c) RETURN c.name", {"id": pid}).result_set)
+
+    first = memory.remember(g, "Fact Fay", company="Fact Co", title="CTO", location="Berlin", email="fay@example.com", note="met at lunch", new_person=True)
+    pid = first["person"]["id"]
+    check(person(pid) == ["CTO", "Berlin", "fay@example.com"] and cities(pid) == ["Berlin"], "title, city and email are saved as fields")
+    found = memory.find(g, "Fact Fay", "Person")[0]
+    check(found["title"] == "CTO" and found["location"] == "Berlin" and found["email"] == "fay@example.com", "find shows them")
+    job = "MATCH (:Person {id: $id})-[w:WORKED_AT {current: true}]->() RETURN w.title"
+    check(g.ro_query(job, {"id": pid}).result_set == [["CTO"]], "the job has the title")
+    met = "MATCH (:Me)-[r:MET]->(:Person {id: $id}) RETURN count(r)"
+
+    fix = memory.remember(g, "", person_id=pid, title="VP of Engineering")
+    check(fix["status"] == "saved" and person(pid)[0] == "VP of Engineering", "a correction replaces the title")
+    check(g.ro_query(job, {"id": pid}).result_set == [["VP of Engineering"]], "a correction reaches the job")
+    check(g.ro_query(met, {"id": pid}).result_set[0][0] == 1, "a correction is not a meeting")
+    text = g.ro_query("MATCH (n:Note {id: $id}) RETURN n.text", {"id": fix["note_id"]}).result_set[0][0]
+    check("VP of Engineering" in text and not text.startswith("Met"), "a correction's note says what changed")
+    check(memory.remember(g, "", person_id=pid, title="VP of Engineering")["status"] == "already_saved", "the same correction twice saves once")
+
+    move = memory.remember(g, "", person_id=pid, location="Paris, France")
+    check(person(pid)[1] == "Paris, France" and cities(pid) == ["Paris"], "a new city replaces the old one")
+    memory.forget(g, "note", move["note_id"])
+    check(person(pid)[1] == "Berlin" and cities(pid) == ["Berlin"], "forget: the old city comes back")
+
+    third = memory.remember(g, "", person_id=pid, title="CEO")
+    memory.forget(g, "note", fix["note_id"])
+    check(person(pid)[0] == "CEO", "forget a middle correction: the newest value stays")
+    memory.forget(g, "note", third["note_id"])
+    check(person(pid)[0] == "CTO" and g.ro_query(job, {"id": pid}).result_set == [["CTO"]], "forget the newest: the value from before comes back")
+
+    g.query("CREATE (p:Person {id: 'imp', name: 'Imp Ida', search: 'imp ida', title: 'Old Title', location: 'Oslo', company: 'Imp Co', headline: 'x'})"
+            " CREATE (p)-[:LIVES_IN]->(:City {id: 'oslo', name: 'Oslo'})"
+            " CREATE (p)-[:WORKED_AT {current: true, title: 'Job Title'}]->(:Company {id: 'imp co', name: 'Imp Co', search: 'imp co'})")
+    n = memory.remember(g, "", person_id="imp", title="New Title", location="Rome", email="ida@example.com")
+    check(person("imp") == ["New Title", "Rome", "ida@example.com"] and cities("imp") == ["Rome"], "an imported person: fields change")
+    memory.forget(g, "note", n["note_id"])
+    check(person("imp") == ["Old Title", "Oslo", None] and cities("imp") == ["Oslo"], "an imported person: forget brings the import's values back")
+    check(g.ro_query(job, {"id": "imp"}).result_set == [["Job Title"]], "an imported person: forget brings the job's title back")
+    node = g.ro_query("MATCH (p:Person {id: $id}) RETURN p", {"id": pid}).result_set[0][0]
+    check(not [k for k in memory.plain(node) if k.endswith("_note")], "ask does not show the bookkeeping fields")
+    memory.forget(g, "note", first["note_id"])
+    check(g.ro_query("MATCH (p:Person {id: $id}) RETURN count(p)", {"id": pid}).result_set[0][0] == 0, "forget the first note: the person goes")
 
 
 def run_rebuild(g):
@@ -402,6 +566,12 @@ def run_rebuild(g):
           "rebuild after a crash: notes come back from the backup")
 
     # --force is how you start over.
+    fact = memory.remember(g, "", person_id=pid, title="Kept Title", location="Lisbon", email="kept@example.com")
+    r = rebuild()
+    memory.setup(g)
+    row = g.ro_query("MATCH (p:Person {id: $id})-[:LIVES_IN]->(c:City) RETURN p.title, p.email, c.name", {"id": pid}).result_set
+    check(row == [["Kept Title", "kept@example.com", "Lisbon"]], "rebuild: corrected fields stay, and the import's old city does not come back")
+    memory.forget(g, "note", fact["note_id"])
     check(rebuild("--force").returncode == 0 and one("MATCH (n:Note) RETURN count(n)") == 0, "rebuild --force drops notes")
     memory.setup(g)
     check(counts() == plain_counts, "rebuild --force: back to a clean graph")
@@ -424,7 +594,13 @@ def run_job_ends(g):
 
 
 def run(g):
+    run_open_client(g)    # first: only the first rebuild of a new graph renumbers the fields
+    run_merge_on_import(g)
     run_rebuild(g)
+    run_company_names(g)
+    run_event_names(g)
+    run_coworkers(g)
+    run_facts(g)
     run_job_ends(g)
     run_names(g)
     run_about(g)
