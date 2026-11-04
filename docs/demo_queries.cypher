@@ -1,4 +1,4 @@
-// THROWAWAY SPIKE: demo queries for the FalkorDB Browser (http://localhost:3000, graph "network").
+// Demo queries for the FalkorDB Browser (http://localhost:3000, graph "network").
 // Paste one query at a time into the query bar and press RUN.
 // Tip: Settings > Query Execution > Limit is set to 5000 so big queries show everything.
 

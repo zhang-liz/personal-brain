@@ -1,4 +1,4 @@
-"""THROWAWAY SPIKE: export the whole FalkorDB graph to JSON for the WebGL viewer.
+"""Export the whole FalkorDB graph to JSON for the WebGL viewer.
 
 Reads every node and edge, in pages (FalkorDB Cloud caps results at 10k rows),
 and writes data/viewer/graph.json (gitignored: it has real names).
@@ -86,7 +86,7 @@ def main():
         "edges": [[index[a], index[b], types.index(t)] for a, b, t in edges],
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")))
+    OUT.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"exported from {where}: {len(ids)} nodes, {len(edges)} edges "
           f"in {time.time() - t0:.1f}s -> {OUT} ({OUT.stat().st_size / 1e6:.1f} MB)")
 

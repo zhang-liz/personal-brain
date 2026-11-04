@@ -28,13 +28,13 @@ def snapshot(graph):
 
 def pending():
     """The snapshot a rebuild left behind when it stopped halfway, or None."""
-    return json.loads(BACKUP.read_text()) if BACKUP.exists() else None
+    return json.loads(BACKUP.read_text(encoding="utf-8")) if BACKUP.exists() else None
 
 
 def save(snap):
     BACKUP.parent.mkdir(parents=True, exist_ok=True)
     temp = BACKUP.with_suffix(".tmp")
-    temp.write_text(json.dumps(snap, ensure_ascii=False))
+    temp.write_text(json.dumps(snap, ensure_ascii=False), encoding="utf-8")
     temp.replace(BACKUP)
 
 
