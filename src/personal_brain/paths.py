@@ -24,7 +24,7 @@ HOME = find_home()
 def env_file_url():
     """FALKORDB_URL from the .env file in HOME, or "" if there is none."""
     env_file = HOME / ".env"
-    lines = env_file.read_text().splitlines() if env_file.exists() else []
+    lines = env_file.read_text(encoding="utf-8").splitlines() if env_file.exists() else []
     return next((l.split("=", 1)[1].strip() for l in lines if l.startswith("FALKORDB_URL=")), "")
 
 

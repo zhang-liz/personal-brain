@@ -1,4 +1,4 @@
-"""THROWAWAY SPIKE: run the demo "story" queries on FalkorDB and save results for the viewer.
+"""Run the demo "story" queries on FalkorDB and save results for the viewer.
 
 Each story is a Cypher query. We store the query text, FalkorDB's run time, and
 the node ids it touched, so the viewer can light them up.
@@ -147,7 +147,7 @@ def main():
                     "ms": round(result.run_time_ms, 2), "source": where})
         print(f"{story['id']:9s} rows={len(result.result_set):4d} nodes={len(ids):4d} pairs={len(pairs):4d} "
               f"{result.run_time_ms:.2f} ms")
-    OUT.write_text(json.dumps(out, ensure_ascii=False, indent=1))
+    OUT.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"wrote {OUT}")
 
 

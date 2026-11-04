@@ -87,7 +87,7 @@ uvx personal-brain forget person "Name"     # a person and every note about them
 uvx personal-brain forget all-notes         # every note and everything they added, to clear a live demo
 ```
 
-Every write hangs off a `Note` node, so you can trace each fact to the note that made it. Running `personal-brain load` again with a new LinkedIn export keeps your notes and what they added. If the new import has the same fact, the import wins. `--force` drops your notes. `PB_GRAPH` picks the graph (default `network`). If FalkorDB is not running, the server still starts, and each tool says how to start it. Windows is not tested.
+Every write hangs off a `Note` node, so you can trace each fact to the note that made it. Running `personal-brain load` again with a new LinkedIn export keeps your notes and what they added. If the new import has the same fact, the import wins. `--force` drops your notes. `PB_GRAPH` picks the graph (default `network`). If FalkorDB is not running, the server still starts, and each tool says how to start it. On Windows, CI checks that it installs and that the server starts. It does not run with a database there, because the runners cannot run FalkorDB.
 
 ## How it works
 
@@ -164,6 +164,7 @@ Then, in another terminal, run the tests. They use throwaway graphs:
 
 ```bash
 .venv/bin/python tests/test_memory.py       # the memory tools (add --cloud to use FALKORDB_URL)
+.venv/bin/python tests/test_no_database.py  # what must work with no database
 .venv/bin/python tests/test_mcp_server.py   # the server, started the way an agent starts it
 .venv/bin/python tests/test_package.py      # the built package, used from another folder
 ```
@@ -198,7 +199,7 @@ Then, in another terminal, run the tests. They use throwaway graphs:
 | `src/personal_brain/viewer/index.html` | The WebGL viewer (three.js r170, MIT, vendored) |
 | `docs/demo_queries.cypher` | Queries to paste into the FalkorDB Browser |
 
-This is a demo-quality build made at a hackathon, not a product.
+This is an early project. It has tests and CI, but commands and tools may still change before 1.0.
 
 ## License
 

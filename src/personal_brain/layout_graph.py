@@ -1,4 +1,4 @@
-"""THROWAWAY SPIKE: precompute 2D and 3D layouts for the WebGL viewer.
+"""Precompute 2D and 3D layouts for the WebGL viewer.
 
 Reads data/viewer/graph.json (from export_graph.py), runs igraph's DrL layout
 in 2D and 3D, and writes the positions back into the same file.
@@ -34,7 +34,7 @@ def normalize(coords, dims):
 
 
 def main():
-    data = json.loads(GRAPH_JSON.read_text())
+    data = json.loads(GRAPH_JSON.read_text(encoding="utf-8"))
     types = data["types"]
     n = len(data["nodes"])
     kept = [(a, b, t) for a, b, t in data["edges"] if a != b and types[t] not in SKIP]
@@ -52,7 +52,7 @@ def main():
         radii = sorted(sum(v * v for v in flat[i * dims:(i + 1) * dims]) ** 0.5 for i in range(n))
         print(f"{dims}D layout: {time.time() - t0:.1f}s, radius p10/p50/p90 = "
               f"{radii[n // 10]:.0f}/{radii[n // 2]:.0f}/{radii[n * 9 // 10]:.0f}")
-    GRAPH_JSON.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")))
+    GRAPH_JSON.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"wrote {GRAPH_JSON} ({GRAPH_JSON.stat().st_size / 1e6:.1f} MB)")
 
 
