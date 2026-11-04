@@ -14,7 +14,7 @@ from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
 TEST_GRAPH = "pb_memory_test"
-sys.path.insert(0, str(PROJECT / "spike"))
+sys.path.insert(0, str(PROJECT / "src"))
 import memory  # noqa: E402
 
 
@@ -26,7 +26,7 @@ def check(ok, what):
 
 def main():
     cloud = ["--cloud"] if "--cloud" in sys.argv else []
-    subprocess.run([sys.executable, str(PROJECT / "spike" / "load_graph.py"), "--sample", "--graph", TEST_GRAPH,
+    subprocess.run([sys.executable, str(PROJECT / "src" / "load_graph.py"), "--sample", "--graph", TEST_GRAPH,
                     "--force", *cloud], check=True, capture_output=True)
     if not cloud:
         memory.os.environ["FALKORDB_URL"] = ""

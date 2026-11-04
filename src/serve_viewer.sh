@@ -3,5 +3,5 @@
 # Only data/viewer/ is served (never the project root, which holds .env).
 set -euo pipefail
 cd "$(dirname "$0")/.."
-cp -R spike/viewer/. data/viewer/
-exec .venv/bin/python spike/server.py
+cp -R src/viewer/. data/viewer/
+exec .venv/bin/python src/server.py

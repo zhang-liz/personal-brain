@@ -5,9 +5,9 @@ company data in data/enriched/ when you have them. Real names, but no message
 text (only message counts). A connections-only export works too.
 Your own event labels and company skip list live in my_brain.json (not in git).
 
-    .venv/bin/python spike/load_graph.py --cloud            # FALKORDB_URL from .env
-    .venv/bin/python spike/load_graph.py                    # local Docker FalkorDB
-    .venv/bin/python spike/load_graph.py --sample --cloud   # the made-up network in sample_data/
+    .venv/bin/python src/load_graph.py --cloud            # FALKORDB_URL from .env
+    .venv/bin/python src/load_graph.py                    # local Docker FalkorDB
+    .venv/bin/python src/load_graph.py --sample --cloud   # the made-up network in sample_data/
 
 A rebuild replaces the graph. It stops if the graph holds notes from the agent
 (they would be lost); add --force to rebuild anyway.

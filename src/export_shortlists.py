@@ -4,7 +4,7 @@ Each list is a few Cypher queries plus a transparent score, so every row says
 why it ranks where it does. Writes data/viewer/shortlists.json (for
 shortlists.html) and one CSV per list in data/viewer/shortlists/.
 
-    .venv/bin/python spike/export_shortlists.py --cloud
+    .venv/bin/python src/export_shortlists.py --cloud
 """
 
 import csv
