@@ -31,6 +31,7 @@ def main():
         check("personal_brain/viewer/index.html" in names and "personal_brain/viewer/vendor/three/build/three.module.js" in names,
               "wheel holds the viewer")
         check("personal_brain/sample_data/linkedin/Connections.csv" in names, "wheel holds the sample network")
+        check(not [n for n in names if "shortlists" in n], "wheel holds no shortlists")
         private = [n for n in names if n.endswith(".env") or n.startswith("data/") or "LinkedInDataExport" in n
                    or n.endswith("my_brain.json")]
         check(not private, "wheel holds no private files")
@@ -104,6 +105,7 @@ def main():
             r = run("export")
             check(r.returncode == 0 and (home / "data/viewer/graph.json").exists(),
                   "export writes to the data folder" + (": " + r.stderr[-300:] if r.returncode else ""))
+            check(not [f for f in (home / "data").rglob("*") if "shortlists" in f.name], "export writes no shortlists")
 
             view = subprocess.Popen([brain, "view"], cwd=user, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             try:
@@ -116,6 +118,7 @@ def main():
                 graph = json.loads(urllib.request.urlopen("http://127.0.0.1:8765/graph.json").read())
                 check("three" in page and graph["nodes"], "view serves the page and the graph")
                 check('id="forget"' not in page and "/api/forget" not in page, "the page has no delete button")
+                check("shortlists" not in page.lower(), "the page has no shortlists button")
 
                 def post(path, text, **headers):
                     request = urllib.request.Request("http://127.0.0.1:8765" + path, json.dumps({"text": text}).encode(), headers)
