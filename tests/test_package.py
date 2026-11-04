@@ -146,6 +146,17 @@ def main():
                       "the viewer API takes a request from its own page")
                 check(post("/api/remember", "Met Local Lou from Good Co", Origin="http://localhost:8765", Host="localhost:8765") == 200,
                       "the viewer API takes a request from localhost")
+                check(post("/api/remember", "Met Viewer Vic from Good Co", Origin="http://127.0.0.1:8765") == 200,
+                      "the viewer's Remember box handles a repeat")
+
+                # Back at an old company with two current jobs: only an agent can say which jobs ended.
+                server = Server([brain, "mcp"], user, env)
+                pid = server.call("remember", name="Busy Bea", company="Old Co", new_person=True)["person"]["id"]
+                server.call("remember", name="", person_id=pid, company="Job One")
+                server.call("remember", name="", person_id=pid, company="Job Two", ended_jobs=[])
+                server.stop()
+                check(post("/api/remember", "Met Busy Bea from Old Co, talked again", Origin="http://127.0.0.1:8765") == 409,
+                      "the viewer's Remember box handles a person with two jobs")
             finally:
                 view.terminate()
                 view.wait(timeout=10)

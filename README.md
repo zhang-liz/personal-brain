@@ -74,7 +74,7 @@ Or put `FALKORDB_URL=...` in `~/.personal-brain/.env`.
 
 | Tool | What it does |
 |---|---|
-| `remember` | Saves who you met, where they work and where you met. Matches the name to people already in the graph. When it is not sure which person you mean, it saves nothing and asks. A new company ends the old job and keeps it in the history. |
+| `remember` | Saves who you met, where they work and where you met. Matches the name to people already in the graph. When it is not sure which person you mean, it saves nothing and asks. A new company ends the old job and keeps it in the history. If the person has several current jobs, it asks which ended. The same call twice saves one meeting. Say when you met if it was not today. |
 | `find` | Finds people, companies and events by name, in any script, typos and missing accents included. |
 | `ask` | Runs a read-only Cypher query (FalkorDB refuses writes), with a 5 second limit and at most 50 rows. The tool description carries the schema. |
 

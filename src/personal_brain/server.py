@@ -58,6 +58,8 @@ def remember(text):
     if r["status"] == "needs_choice":
         who = ", ".join(f"{c['name']} ({', '.join(c.get('works_at', [])) or 'no company'})" for c in r["candidates"])
         return 409, {"error": f"Not sure which person: {who}. Ask your agent, it can pick one."}
+    if r["status"] == "needs_jobs":
+        return 409, {"error": f"{r['person']['name']} has {len(r['current_jobs'])} current jobs. Ask your agent, it can say which ended."}
     topics = [t for t, rx in TOPIC_RE.items() if rx.search(parts["note"])]
     pnode = q("MATCH (p:Person {id: $pid}) RETURN id(p)", {"pid": r["person"]["id"]}).result_set[0][0]
     return 200, {"parsed": parts, "topics": topics, "person": pnode, "ms": r["ms"], "source": SOURCE,
