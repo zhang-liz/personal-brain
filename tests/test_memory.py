@@ -176,6 +176,59 @@ def run_dates(g):
     check(g.ro_query("MATCH (n:Note) RETURN count(n)").result_set[0][0] == notes, "a refused date saves nothing")
 
 
+class BreaksAfter:
+    """The graph, with writes that start to fail after some number of them, as when the connection drops."""
+
+    def __init__(self, graph, writes, also_cleanup=True):
+        self.graph, self.left, self.also_cleanup, self.broken = graph, writes, also_cleanup, False
+
+    def __getattr__(self, name):
+        return getattr(self.graph, name)
+
+    def query(self, *args, **kwargs):
+        if self.broken and not self.also_cleanup:
+            raise ConnectionError("connection dropped")
+        if self.left == 0 and not self.broken:
+            self.broken = True
+            raise ConnectionError("connection dropped")
+        self.left -= 1
+        return self.graph.query(*args, **kwargs)
+
+
+def run_half_saved(g):
+    """A save that stops halfway leaves nothing behind, and a retry saves all of it."""
+    def count(cypher, **params):
+        return g.ro_query(cypher, params).result_set[0][0]
+
+    call = dict(company="Half Co", event="Half Meetup", note="half saved words", on="2026-04-01")
+    for writes in range(1, 8):
+        name = f"Halfway Hal {'abcdefgh'[writes]}"
+        try:
+            memory.remember(BreaksAfter(g, writes), name, **call)
+            check(False, f"the write after {writes} writes fails")
+        except ConnectionError:
+            pass
+        check(count("MATCH (n:Note {text: 'half saved words'}) RETURN count(n)") == 0, f"stops after {writes} writes: no note stays")
+        check(count("MATCH (p:Person {name: $n}) RETURN count(p)", n=name) == 0, f"stops after {writes} writes: no person stays")
+
+    # The connection stays down, so cleaning up fails too. The retry must still save everything.
+    try:
+        memory.remember(BreaksAfter(g, 2, also_cleanup=False), "Stuck Stu", **call)
+        check(False, "a save with a dead connection fails")
+    except ConnectionError:
+        pass
+    r = memory.remember(g, "Stuck Stu", **call)
+    check(r["status"] == "saved", "a retry after a dead connection saves, and does not say already_saved")
+    check(count("MATCH (p:Person {name: 'Stuck Stu'}) RETURN count(p)") == 1, "the half-saved person does not stay as a second person")
+    check(count("MATCH (n:Note {saving: true}) RETURN count(n)") == 0, "no half-saved note stays")
+    row = g.ro_query("MATCH (p:Person {id: $id})-[:WORKED_AT {current: true}]->(c), (p)-[:MET_AT]->(e) RETURN c.name, e.name",
+                     {"id": r["person"]["id"]}).result_set
+    check(row == [["Half Co", "Half Meetup"]], "the retry saves the job and the event")
+    check(memory.remember(g, "Stuck Stu", **call)["status"] == "already_saved", "after a full save, a repeat is found")
+    g.query("MATCH (n:Note {text: 'half saved words'}) DETACH DELETE n")
+    g.query("MATCH (p:Person {name: 'Stuck Stu'}) DETACH DELETE p")
+
+
 def run_repeats(g):
     """An agent that retries a call must not save the meeting twice."""
     def count(cypher, **params):
@@ -360,6 +413,7 @@ def run(g):
     run_about(g)
     run_forget(g)
     run_dates(g)
+    run_half_saved(g)
     run_repeats(g)
     run_jobs(g)
     memory.setup(g)
