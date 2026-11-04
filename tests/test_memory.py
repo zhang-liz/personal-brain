@@ -407,8 +407,25 @@ def run_rebuild(g):
     check(counts() == plain_counts, "rebuild --force: back to a clean graph")
 
 
+def run_job_ends(g):
+    """A current job has no end date. Older graphs held today's date there as a stand-in."""
+    stand_ins = "MATCH ()-[w:WORKED_AT {current: true}]->() WHERE w.end IS NOT NULL RETURN count(w)"
+    check(g.ro_query(stand_ins).result_set[0][0] == 0, "a new graph: current jobs have no end date")
+    ended = g.ro_query("MATCH ()-[w:WORKED_AT {current: false}]->() WHERE w.end IS NOT NULL RETURN count(w)").result_set[0][0]
+    check(ended > 0, "a new graph: past jobs keep their end date")
+    g.query("CREATE (p:Person {id: 'old-end', name: 'Old End', search: 'old end'})"
+            "-[:WORKED_AT {current: true, start: 2020.0, end: 2026.83}]->(:Company {id: 'old end co', name: 'Old End Co', search: 'old end co'})")
+    memory.setup(g)
+    check(g.ro_query(stand_ins).result_set[0][0] == 0, "setup clears the stand-in on an older graph")
+    check(g.ro_query("MATCH (:Person {id: 'old-end'})-[w:WORKED_AT]->() RETURN w.start, w.current").result_set == [[2020.0, True]],
+          "setup keeps the rest of that job")
+    check(g.ro_query("MATCH ()-[w:WORKED_AT {current: false}]->() WHERE w.end IS NOT NULL RETURN count(w)").result_set[0][0] == ended,
+          "setup keeps real end dates")
+
+
 def run(g):
     run_rebuild(g)
+    run_job_ends(g)
     run_names(g)
     run_about(g)
     run_forget(g)

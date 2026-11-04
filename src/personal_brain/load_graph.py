@@ -62,7 +62,7 @@ def fold(text):
 
 def load_settings():
     """Your own labels (my_brain.json, see my_brain.example.json). Optional."""
-    s = json.loads(SETTINGS.read_text()) if SETTINGS.exists() else {}
+    s = json.loads(SETTINGS.read_text(encoding="utf-8")) if SETTINGS.exists() else {}
     # Names for the days you added many connections ("YYYY-MM-DD": "Event name").
     events = {date.fromisoformat(d): name for d, name in s.get("events", {}).items()}
     # Companies that should never count as well-funded startups (e.g. subsidiaries).
@@ -205,7 +205,7 @@ def load_me():
 def load_connections():
     lines = (find_export() / "Connections.csv").read_text(encoding="utf-8").splitlines()
     start = next(i for i, line in enumerate(lines) if line.startswith("First Name,"))
-    forgotten = set(json.loads(FORGOTTEN.read_text())) if FORGOTTEN.exists() else set()
+    forgotten = set(json.loads(FORGOTTEN.read_text(encoding="utf-8"))) if FORGOTTEN.exists() else set()
     people = {}
     for row in csv.DictReader(lines[start:]):
         slug = slug_of(row["URL"])
@@ -225,7 +225,7 @@ def load_connections():
 def load_enriched():
     profiles = {}
     for path in sorted(ENRICHED.glob("batch_*.json")):
-        for item in json.loads(path.read_text())["items"]:
+        for item in json.loads(path.read_text(encoding="utf-8"))["items"]:
             if item.get("headline") or item.get("positions"):
                 profiles[slug_of(item.get("inputUrl"))] = item
     return profiles
@@ -238,7 +238,7 @@ SMALL_TEAMS = {"1-10", "11-50", "51-100", "101-250", "251-500", "501-1000", "100
 def load_companies():
     found = {}
     for path in sorted(ENRICHED.glob("companies_*.json")):
-        for item in json.loads(path.read_text())["items"]:
+        for item in json.loads(path.read_text(encoding="utf-8"))["items"]:
             if item.get("name") and item.get("searchTerm"):
                 found[norm(item["searchTerm"])] = item
     return found
@@ -299,7 +299,7 @@ def load_share_hints():
 EVENT_TOPICS = ["AI Agents", "Agent Memory", "Knowledge Graphs", "RAG & Search", "LLMs & GenAI",
                 "Developer Relations"]
 WORDS = Path("/usr/share/dict/words")
-COMMON_WORDS = set(WORDS.read_text().lower().split()) if WORDS.exists() else set()
+COMMON_WORDS = set(WORDS.read_text(encoding="utf-8").lower().split()) if WORDS.exists() else set()
 
 
 def is_common(name):
@@ -339,7 +339,7 @@ def load_upcoming(people, current, countries):
     Returns event rows and (event, Person or Company, via) host links."""
     items = {}
     for path in sorted(ENRICHED.glob("events_*.json")):
-        for e in json.loads(path.read_text())["items"]:
+        for e in json.loads(path.read_text(encoding="utf-8"))["items"]:
             items[e["eventId"]] = e
     name_count = Counter(norm(p["name"]) for p in people.values())
     slug_by_name = {norm(p["name"]): s for s, p in people.items()}
@@ -444,7 +444,7 @@ def main():
                 a, b = years(pos.get("timePeriod"))
                 current = not ((pos.get("timePeriod") or {}).get("endDate"))
                 works.append({"p": slug, "c": key, "title": pos.get("title") or "",
-                              "start": a, "end": b, "current": current})
+                              "start": a, "end": None if current else b, "current": current})
                 if a is not None:
                     work_spans[key].append((slug, a, b))
         else:

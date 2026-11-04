@@ -28,7 +28,7 @@ Every node has id and name. Person: headline, title, company, location, connecte
 Company: well_funded, funding, employees. Event: date, upcoming, summary, url.
 Edges:
 (Me)-[:CONNECTED {on}]->(Person)
-(Person)-[:WORKED_AT {title, start, end, current}]->(Company)
+(Person)-[:WORKED_AT {title, start, end, current}]->(Company)   end is only on past jobs
 (Person)-[:STUDIED_AT]->(School), (Person)-[:HAS_SKILL]->(Skill), (Person)-[:HAS_EXPERIENCE {years}]->(Skill)
 (Person)-[:INTO]->(Topic), (Person)-[:LIVES_IN]->(City)
 (Person)-[:KNOWS {via, place}]-(Person)   inferred: coworkers or classmates at the same time
@@ -60,6 +60,8 @@ def setup(g):
                     {"rows": [[i, fold(name)] for i, name in rows]})
             last = rows[-1][0]
     create_search_indexes(g)
+    # Older graphs held the build date as the end of a current job.
+    g.query("MATCH ()-[w:WORKED_AT {current: true}]->() WHERE w.end IS NOT NULL SET w.end = NULL")
 
 
 # ---------- find ----------
@@ -409,9 +411,9 @@ def forget_person(g, pid):
     for nid in notes:
         forget_note(g, nid)
     g.query("MATCH (p:Person {id: $id}) DETACH DELETE p", {"id": pid})
-    forgotten = set(json.loads(FORGOTTEN.read_text())) if FORGOTTEN.exists() else set()
+    forgotten = set(json.loads(FORGOTTEN.read_text(encoding="utf-8"))) if FORGOTTEN.exists() else set()
     FORGOTTEN.parent.mkdir(parents=True, exist_ok=True)
-    FORGOTTEN.write_text(json.dumps(sorted(forgotten | {pid}), indent=1))
+    FORGOTTEN.write_text(json.dumps(sorted(forgotten | {pid}), indent=1), encoding="utf-8")
     return {"forgot": "person", "name": rows[0][0], "notes": len(notes), "kept_out_of_rebuilds": True}
 
 

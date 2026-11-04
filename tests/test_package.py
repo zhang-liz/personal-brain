@@ -113,6 +113,18 @@ def main():
             rows = server.call("ask", cypher="MATCH (n:Note {id: $id}) RETURN n.id", params={"id": note["note_id"]})["rows"]
             check(r.returncode == 0 and rows == [], "the undo command remember gives removes the note")
             check(run("forget", "note", "note-nope", "--yes").returncode != 0, "forget note: unknown id fails")
+
+            # Windows does not default to UTF-8. Make this system act the same way.
+            ascii_only = dict(PYTHONUTF8="0", PYTHONCOERCECLOCALE="0", LC_ALL="C")
+            non_latin = server.call("remember", name="山田 太郎", company="株式会社テスト", note="図のデータベース", new_person=True)
+            r = run("notes", **ascii_only)
+            check(r.returncode == 0 and non_latin["note_id"] in r.stdout, "notes works with non-Latin text when the system default is not UTF-8" + (": " + r.stderr[-200:] if r.returncode else ""))
+            r = run("load", "--sample", "--graph", TEST_GRAPH, **ascii_only)
+            check(r.returncode == 0 and "Kept" in r.stdout, "load keeps non-Latin notes when the system default is not UTF-8" + (": " + r.stderr[-200:] if r.returncode else ""))
+            r = run("export", **ascii_only)
+            check(r.returncode == 0, "export works when the system default is not UTF-8" + (": " + r.stderr[-200:] if r.returncode else ""))
+            r = run("forget", "person", non_latin["person"]["id"], "--yes", **ascii_only)
+            check(r.returncode == 0, "forget works with non-Latin text when the system default is not UTF-8" + (": " + r.stderr[-200:] if r.returncode else ""))
             server.stop()
 
             r = run("export")
