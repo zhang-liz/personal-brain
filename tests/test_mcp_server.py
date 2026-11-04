@@ -1,0 +1,99 @@
+"""End-to-end check of the MCP server over stdio, the way an agent starts it.
+
+Starts the command in .mcp.json from a subfolder, with no database and then with
+local FalkorDB (graph "pb_mcp_test", deleted at the end). Never touches "network".
+
+    .venv/bin/python tests/test_mcp_server.py
+"""
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+PROJECT = Path(__file__).resolve().parent.parent
+TEST_GRAPH = "pb_mcp_test"
+NO_DATABASE = "redis://localhost:6399"
+sys.path.insert(0, str(PROJECT / "spike"))
+import memory  # noqa: E402
+
+
+def check(ok, what):
+    print(("ok   " if ok else "FAIL ") + what)
+    if not ok:
+        raise SystemExit(1)
+
+
+class Server:
+    """The server from .mcp.json, started from spike/, spoken to in plain JSON-RPC."""
+
+    def __init__(self, url):
+        config = json.loads((PROJECT / ".mcp.json").read_text())["mcpServers"]["personal-brain"]
+        self.process = subprocess.Popen([config["command"], *config["args"]], cwd=PROJECT / "spike", text=True,
+                                        env={**os.environ, "FALKORDB_URL": url, "PB_GRAPH": TEST_GRAPH},
+                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        self.last_id = 0
+        init = self.request("initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
+                                           "clientInfo": {"name": "test", "version": "0"}})
+        self.info = init["result"]["serverInfo"]
+        self.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
+
+    def send(self, message):
+        self.process.stdin.write(json.dumps(message) + "\n")
+        self.process.stdin.flush()
+
+    def request(self, method, params=None):
+        self.last_id += 1
+        self.send({"jsonrpc": "2.0", "id": self.last_id, "method": method, "params": params or {}})
+        line = self.process.stdout.readline()
+        if not line:
+            raise SystemExit(f"FAIL server stopped during {method}")
+        return json.loads(line)
+
+    def call(self, tool, **arguments):
+        result = self.request("tools/call", {"name": tool, "arguments": arguments})["result"]
+        if "structuredContent" in result:
+            return result["structuredContent"].get("result", result["structuredContent"])
+        return json.loads(result["content"][0]["text"])
+
+    def stop(self):
+        self.process.stdin.close()
+        self.process.wait(timeout=10)
+
+
+def no_database():
+    server = Server(NO_DATABASE)
+    tools = [t["name"] for t in server.request("tools/list")["result"]["tools"]]
+    check(sorted(tools) == ["ask", "find", "forget", "remember"], "no database: server starts and lists its tools")
+    check(bool(server.info.get("version")), "server reports a version")
+    error = server.call("find", name="Anyone").get("error", "")
+    check("FalkorDB" in error and "FALKORDB_URL" in error and "docker run" in error, "no database: a tool says what to do")
+    check(server.process.poll() is None, "no database: server keeps running")
+    server.stop()
+
+
+def local_database():
+    os.environ["FALKORDB_URL"] = ""
+    graph, _ = memory.connect(TEST_GRAPH)
+    server = Server("")
+    try:
+        saved = server.call("remember", name="Stdio Sam", company="Pipe Works", note="met over stdio")
+        check(saved.get("status") == "saved", "remember over stdio")
+        found = server.call("find", name="Stdio Sam", label="Person")
+        check(found[0]["id"] == saved["person"]["id"], "find over stdio")
+        rows = server.call("ask", cypher="MATCH (p:Person {name: $n}) RETURN p.company", params={"n": "Stdio Sam"})["rows"]
+        check(rows == [["Pipe Works"]], "ask over stdio")
+        check(server.call("forget", what="note", id=saved["note_id"]).get("forgot") == "note", "forget over stdio")
+        error = server.call("find", name="Sam", label="Planet")["error"]
+        check("Person" in error and "Planet" in error, "unknown label: the error names the choices")
+        error = server.call("forget", what="fact", id="abc")["error"]
+        check("rel_id" in error and "abc" in error, "bad rel_id: the error says what to pass")
+    finally:
+        server.stop()
+        graph.delete()
+
+
+if __name__ == "__main__":
+    no_database()
+    local_database()
