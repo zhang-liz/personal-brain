@@ -11,7 +11,8 @@ USAGE = f"""personal-brain {__version__}: your LinkedIn network as agent memory 
 Commands:
   mcp                      run the MCP server for your agent (stdio)
   load [--sample] [--cloud] [--force]
-                           build the graph from your LinkedIn export, or from the made-up sample
+                           build the graph from your LinkedIn export, or from the made-up sample.
+                           It keeps your agent's notes. --force drops them
   export [--cloud]         write the viewer's data from the graph
   view                     open the viewer's server on http://127.0.0.1:8765
   forget person <name or id> [--yes]
