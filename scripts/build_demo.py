@@ -56,7 +56,6 @@ def main():
     shutil.copyfile(SITE / "graph.json", DATA / "graph_raw.json")
     shape_galaxy()
     run("-m", "personal_brain.export_stories", **env)
-    run("-m", "personal_brain.export_shortlists", **env)
     shutil.copytree(PROJECT / "src" / "personal_brain" / "viewer", SITE, dirs_exist_ok=True)
     index = SITE / "index.html"
     page = index.read_text()

@@ -168,7 +168,6 @@
   <button id="bTime">Time-lapse</button>
   <span class="sep"></span>
   <button id="bDemo">▶ Demo</button>
-  <button id="bLists" title="Ranked co-hosts, podcast guests and places to speak">Shortlists ↗</button>
 </div>
 <div id="tip"></div>
 
@@ -860,7 +859,6 @@ document.getElementById("b3d").onclick = () => { stopDemo(); setMode(true); };
 document.getElementById("bRotate").onclick = (ev) => setRotate(!ev.currentTarget.classList.contains("on"));
 document.getElementById("bReset").onclick = () => { stopDemo(); resetView(); };
 document.getElementById("bIntro").onclick = () => { stopDemo(); bigBang(); };
-document.getElementById("bLists").onclick = () => window.open("shortlists.html", "_blank", "noopener");
 document.getElementById("bTime").onclick = () => { stopDemo(); timelapse ? stopTimelapse() : startTimelapse(); };
 document.getElementById("bDemo").onclick = () => (demoToken ? stopDemo() : runDemo());
 addEventListener("keydown", (ev) => {
