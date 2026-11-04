@@ -17,7 +17,7 @@ from pathlib import Path
 OUT = Path(__file__).resolve().parent.parent / "src" / "personal_brain" / "sample_data"
 rnd = random.Random(7)
 
-FIRST = ["Priya", "Jonas", "Tomás", "Amara", "Kenji", "Lucía", "Mateo", "Ifeoma", "Noor", "Elif", "Rafael", "Hana",
+FIRST = ["Sana", "Jonas", "Tomás", "Amara", "Kenji", "Lucía", "Mateo", "Ifeoma", "Noor", "Elif", "Rafael", "Hana",
          "Diego", "Ingrid", "Kwame", "Mei", "Arjun", "Zofia", "Yusuf", "Camille", "Oskar", "Leilani", "Ravi", "Freya",
          "Anouk", "Thabo", "Valentina", "Hiro", "Saoirse", "Dmitri", "Ayesha", "Nikolai", "Imani", "Bruno", "Linnea",
          "Farah", "Emeka", "Rosa", "Tariq", "Greta", "Sven", "Adaeze", "Paolo", "Mariam", "Teodor", "Esme", "Kai",

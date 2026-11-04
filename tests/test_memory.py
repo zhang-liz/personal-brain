@@ -45,7 +45,7 @@ def main():
 
 def run_names(g):
     """Names in any script: found again, never merged with someone else's."""
-    check(memory.fold("Tomás Ortega") == "tomas ortega" and memory.norm("Acme, Inc.") == "acme inc",
+    check(memory.fold("Tomás Ortega") == "tomas ortega" and memory.norm("Kestrel, Inc.") == "kestrel inc",
           "Latin names fold as before")
     for name in ["王伟", "Иван Петров", "김철수", "محمد علي", "प्रिया शर्मा", "山田 太郎"]:
         r = memory.remember(g, name, new_person=True)
