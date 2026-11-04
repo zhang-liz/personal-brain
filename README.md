@@ -87,7 +87,7 @@ uvx personal-brain forget person "Name"     # a person and every note about them
 uvx personal-brain forget all-notes         # every note and everything they added, to clear a live demo
 ```
 
-Every write hangs off a `Note` node, so you can trace each fact to the note that made it. `PB_GRAPH` picks the graph (default `network`). If FalkorDB is not running, the server still starts, and each tool says how to start it. Windows is not tested.
+Every write hangs off a `Note` node, so you can trace each fact to the note that made it. Running `personal-brain load` again with a new LinkedIn export keeps your notes and what they added. If the new import has the same fact, the import wins. `--force` drops your notes. `PB_GRAPH` picks the graph (default `network`). If FalkorDB is not running, the server still starts, and each tool says how to start it. Windows is not tested.
 
 ## How it works
 
@@ -189,6 +189,7 @@ Then, in another terminal, run the tests. They use throwaway graphs:
 | `src/personal_brain/memory.py` | The memory itself: remember, find, ask, forget (used by the MCP server, the viewer and the forget command) |
 | `src/personal_brain/mcp_server.py` | The MCP server for Claude Code and other agents |
 | `src/personal_brain/forget.py` | The `personal-brain forget` command |
+| `src/personal_brain/notes_backup.py` | Keeps your notes through a rebuild |
 | `.mcp.json` | Tells Claude Code how to start the MCP server in a clone |
 | `tests/` | End-to-end checks of the memory tools, the MCP server and the built package, on throwaway graphs |
 | `src/personal_brain/sample_data/` | The made-up sample network |
