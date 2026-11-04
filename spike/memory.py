@@ -52,10 +52,13 @@ def setup(g):
     g.query("MERGE (me:Me {id: 'me'}) ON CREATE SET me.name = 'Me'")   # an empty graph works too
     g.query("UNWIND $topics AS t MERGE (:Topic {id: t, name: t})", {"topics": list(TOPIC_RE)})
     for label in ["Person", "Company", "Event"]:
-        # Graphs built before search existed: add the folded name, 5,000 nodes at a time.
-        while rows := g.query(f"MATCH (n:{label}) WHERE n.search IS NULL RETURN id(n), n.name LIMIT 5000").result_set:
+        # Older graphs have no folded name, or an empty one on non-Latin names: fill it in, 5,000 nodes at a time.
+        last = -1
+        while rows := g.query(f"MATCH (n:{label}) WHERE id(n) > $last AND (n.search IS NULL OR n.search = '')"
+                              " RETURN id(n), n.name ORDER BY id(n) LIMIT 5000", {"last": last}).result_set:
             g.query("UNWIND $rows AS r MATCH (n) WHERE id(n) = r[0] SET n.search = r[1]",
                     {"rows": [[i, fold(name)] for i, name in rows]})
+            last = rows[-1][0]
     create_search_indexes(g)
 
 
@@ -173,7 +176,7 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
       " CREATE (n)-[:ABOUT]->(p), (me)-[:MET {on: $today, note: $nid}]->(p)")
 
     if company:
-        cid = norm(company)
+        cid = norm(company) or company    # an emoji has no words: use it as it is
         q("MERGE (c:Company {id: $cid})"
           " ON CREATE SET c.name = $company, c.search = $search, c.source = 'agent', c.note = $nid",
           cid=cid, company=company, search=fold(company))
@@ -190,7 +193,7 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
 
     if event:
         same = [m for m in find(g, event, "Event", 5) if fold(m["name"]) == fold(event)]
-        eid = same[0]["id"] if same else "note-" + norm(event).replace(" ", "-")
+        eid = same[0]["id"] if same else "note-" + (norm(event) or event).replace(" ", "-")
         q("MERGE (e:Event {id: $eid})"
           " ON CREATE SET e.name = $event, e.search = $search, e.date = $today, e.confirmed = true,"
           " e.source = 'agent', e.note = $nid"
