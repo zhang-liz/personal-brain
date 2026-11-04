@@ -32,6 +32,9 @@ def run(module, *args):
 
 
 def main():
+    # A pipe on Windows may not take every script. A name in another script must not stop the command.
+    sys.stdout.reconfigure(errors="backslashreplace")
+    sys.stderr.reconfigure(errors="backslashreplace")
     command, args = (sys.argv[1], sys.argv[2:]) if len(sys.argv) > 1 else ("", [])
     if command == "--version":
         print(f"personal-brain {__version__}")
