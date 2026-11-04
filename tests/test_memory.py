@@ -202,7 +202,7 @@ def run(g):
     check(f["notes"] == 1 and left == 0, "forget person: person, note and new event gone")
     check(r["person"]["id"] in memory.FORGOTTEN.read_text(), "forgotten person kept out of rebuilds")
 
-    # ask is read-only, and a fact can be forgotten by its rel_id.
+    # ask is read-only, and facts cannot be forgotten one at a time.
     a = memory.ask(g, "MATCH (:Me)-[r:CONNECTED]->(p:Person) RETURN r, p.name LIMIT 1")
     check(a["rows"] and a["rows"][0][0]["type"] == "CONNECTED", "ask returns rows")
     try:
@@ -210,8 +210,12 @@ def run(g):
         check(False, "ask refuses writes")
     except Exception:
         check(True, "ask refuses writes")
-    f = memory.forget(g, "fact", a["rows"][0][0]["rel_id"])
-    check(f["fact"].endswith(a["rows"][0][1]), "forget fact by rel_id")
+    check("rel_id" not in a["rows"][0][0], "ask does not return rel_id")
+    try:
+        memory.forget(g, "fact", "1")
+        check(False, "forget refuses a fact")
+    except ValueError:
+        check(True, "forget refuses a fact")
 
     total = g.ro_query("MATCH (n:Note) RETURN count(n)").result_set[0][0]
     check(memory.forget_all_notes(g) >= total and
