@@ -65,9 +65,11 @@ def main():
     if total != len(edges):
         sys.exit(f"exported {len(edges)} edges but graph has {total}")
 
-    # Re-index nodes 0..n-1 for the viewer's typed arrays.
-    ids = sorted(nodes)
-    index = {nid: i for i, nid in enumerate(ids)}
+    # In the viewer's typed arrays, a node's place is its id in FalkorDB. Forget leaves gaps, and they hold their place.
+    ids = range(max_id + 1)
+    for nid in ids:
+        nodes.setdefault(nid, ["Gone", "", "", ""])
+    index = {nid: nid for nid in ids}
     labels = sorted({n[0] for n in nodes.values()})
     types = sorted({e[2] for e in edges})
     degree = [0] * len(ids)

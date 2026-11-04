@@ -29,7 +29,7 @@ from zoneinfo import ZoneInfo
 
 from falkordb import FalkorDB
 
-from personal_brain import notes_backup
+from personal_brain import job_changes, notes_backup
 from personal_brain.paths import HOME, PACKAGE, cloud_url
 SAMPLE = "--sample" in sys.argv
 SAMPLE_DIR = Path(os.environ.get("PB_SAMPLE_DIR", PACKAGE / "sample_data"))
@@ -261,26 +261,30 @@ def funding_line(cb):
 
 
 def load_messages():
-    """Message counts per person and group-chat participant sets (by slug)."""
+    """Message counts per person, group-chat participant sets, and each person's last message date (by slug)."""
     if not (find_export() / "messages.csv").exists():
-        return Counter(), []
+        return Counter(), [], {}
     with open(find_export() / "messages.csv", encoding="utf-8") as f:
         rows = [(row["CONVERSATION ID"],
                  {slug_of(u) for u in [row["SENDER PROFILE URL"]] + row["RECIPIENT PROFILE URLS"].split(",")
-                  if u.strip()} - {""})
+                  if u.strip()} - {""},
+                 (row.get("DATE") or "")[:10])    # only the day: the text of a message never leaves the export
                 for row in csv.DictReader(f)]
     # You are in almost every message: the most common profile is you.
-    mine = Counter(s for _, slugs in rows for s in slugs).most_common(1)
+    mine = Counter(s for _, slugs, _ in rows for s in slugs).most_common(1)
     me = mine[0][0] if mine else ""
     counts = Counter()
+    last = {}
     convs = defaultdict(set)
-    for conv, slugs in rows:
+    for conv, slugs, day in rows:
         slugs = slugs - {me}
         for s in slugs:
             counts[s] += 1
+            if re.fullmatch(r"\d{4}-\d\d-\d\d", day) and day > last.get(s, ""):
+                last[s] = day
         convs[conv] |= slugs
     groups = [s for s in convs.values() if len(s) >= 2]
-    return counts, groups
+    return counts, groups, last
 
 
 def load_share_hints():
@@ -386,7 +390,7 @@ def load_upcoming(people, current, countries):
 def main():
     people = load_connections()
     profiles = load_enriched()
-    msg_counts, groups = load_messages()
+    msg_counts, groups, last_messages = load_messages()
     share_hints = load_share_hints()
     print(f"connections {len(people)}, enriched {len(profiles)}, group chats {len(groups)}")
 
@@ -425,7 +429,7 @@ def main():
             "id": slug, "name": p["name"], "search": fold(p["name"]), "url": p["url"], "headline": headline,
             "about": about, "location": location, "title": p["title"],
             "company": p["company"], "connected_on": p["connected_on"].isoformat(),
-            "messages": msg_counts.get(slug, 0), "enriched": bool(prof),
+            "messages": msg_counts.get(slug, 0), "last_message": last_messages.get(slug), "enriched": bool(prof),
             "event_contact": bool(EVENT_ROLE_RE.search(role_text)),
         })
         for t in topics:
@@ -582,6 +586,7 @@ def main():
     else:
         db = FalkorDB(host="localhost", port=6379)
     graph = db.select_graph(GRAPH)
+    old_jobs = job_changes.read_jobs(graph) if GRAPH in db.list_graphs() else {}
     kept = None
     if "--force" not in sys.argv:
         kept = notes_backup.pending() or (notes_backup.snapshot(graph) if GRAPH in db.list_graphs() else None)
@@ -602,7 +607,7 @@ def main():
     graph.query("CREATE (:Me {id: 'me', name: $name, title: $title, location: $location})", me)
     run("UNWIND $rows AS r CREATE (:Person {id: r.id, name: r.name, search: r.search, url: r.url, headline: r.headline,"
         " about: r.about, location: r.location, title: r.title, company: r.company,"
-        " connected_on: r.connected_on, messages: r.messages, enriched: r.enriched,"
+        " connected_on: r.connected_on, messages: r.messages, last_message: r.last_message, enriched: r.enriched,"
         " event_contact: r.event_contact})", persons)
     run("UNWIND $rows AS r CREATE (c:Company {id: r.id, name: r.name}) SET c += r", company_rows)
     run("UNWIND $rows AS r CREATE (:Investor {id: r.id, name: r.name})",
@@ -659,12 +664,14 @@ def main():
     if me_city:
         graph.query("MATCH (m:Me), (c:City {id: $c}) CREATE (m)-[:LIVES_IN]->(c)", {"c": norm(me_city)})
     create_search_indexes(graph)
+    job_news = job_changes.mark(graph, old_jobs)
     if kept and kept["nodes"]:
         notes, merged = notes_backup.restore(graph, kept)
         print(f"Kept {notes} notes and what they added. Use --force to drop them.")
         if merged:
             print(f"Merged {merged} people you saved with the same people in this import.")
     notes_backup.clear()
+    job_changes.report(job_news)
 
     nodes = graph.query("MATCH (n) RETURN labels(n)[0], count(n) ORDER BY count(n) DESC").result_set
     rels = graph.query("MATCH ()-[r]->() RETURN type(r), count(r) ORDER BY count(r) DESC").result_set

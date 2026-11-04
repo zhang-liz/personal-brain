@@ -362,15 +362,20 @@ def build(args):
     me_url = "https://www.linkedin.com/in/pb-demo-me"
     with open(linkedin / "messages.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["CONVERSATION ID", "SENDER PROFILE URL", "RECIPIENT PROFILE URLS"])
+        dates = random.Random(11)    # its own generator, so the rest of the demo stays the same
+
+        def sent():
+            return f"{dates.randint(2023, 2026)}-{dates.randint(1, 12):02d}-{dates.randint(1, 28):02d} 12:00:00 UTC"
+
+        w.writerow(["CONVERSATION ID", "SENDER PROFILE URL", "RECIPIENT PROFILE URLS", "DATE"])
         for i, p in enumerate(rnd.sample(people, len(people) // 6)):
             for _ in range(rnd.randint(1, 8)):
-                w.writerow([f"dm-{i}", rnd.choice([me_url, p["url"]]), me_url if rnd.random() < 0.5 else p["url"]])
+                w.writerow([f"dm-{i}", rnd.choice([me_url, p["url"]]), me_url if rnd.random() < 0.5 else p["url"], sent()])
         for g in range(40):
             members = rnd.sample(people, min(rnd.randint(3, 7), len(people)))
-            w.writerow([f"group-{g}", me_url, ",".join(m["url"] for m in members)])
+            w.writerow([f"group-{g}", me_url, ",".join(m["url"] for m in members), sent()])
             for m in members:
-                w.writerow([f"group-{g}", m["url"], ",".join([me_url] + [x["url"] for x in members if x is not m])])
+                w.writerow([f"group-{g}", m["url"], ",".join([me_url] + [x["url"] for x in members if x is not m]), sent()])
     (enriched / "batch_demo.json").write_text(json.dumps({"items": items}, ensure_ascii=False))
 
     companies = [{"name": s[0], "searchTerm": s[0], "employeeCount": s[1], "ipoStatus": "private", "operatingStatus": "active",
