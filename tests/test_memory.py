@@ -7,6 +7,8 @@ forget against it, then deletes the graph. Never touches your "network" graph.
     .venv/bin/python tests/test_memory.py           # local FalkorDB
 """
 
+import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -14,6 +16,7 @@ from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
 TEST_GRAPH = "pb_memory_test"
+REBUILD_HOME = tempfile.mkdtemp()   # keeps the real data folder out of rebuild tests
 from personal_brain import memory  # noqa: E402
 
 
@@ -266,7 +269,93 @@ def run_about(g):
     check(refused(memory.about, g, "   "), "about: empty words are refused")
 
 
+def rebuild(*flags):
+    """Run load on the test graph, the way you would after a new LinkedIn export."""
+    r = subprocess.run([sys.executable, "-m", "personal_brain.load_graph", "--sample", "--graph", TEST_GRAPH, *flags],
+                       capture_output=True, text=True, env={**os.environ, "PB_HOME": REBUILD_HOME})
+    return r
+
+
+def run_rebuild(g):
+    """A new LinkedIn import keeps everything your notes added."""
+    def one(cypher, **params):
+        rows = g.ro_query(cypher, params).result_set
+        return rows[0][0] if rows else None
+
+    def counts():
+        nodes = dict(g.ro_query("MATCH (n) RETURN labels(n)[0], count(n)").result_set)
+        edges = dict(g.ro_query("MATCH ()-[r]->() RETURN type(r), count(r)").result_set)
+        return nodes, edges
+
+    check(rebuild("--force").returncode == 0, "start from a clean graph")
+    memory.setup(g)
+    plain_counts = counts()
+
+    # A new person, with a new company, a new event and a topic.
+    new = memory.remember(g, "Kept Kay", company="Kept Co", event="Kept Meetup", note="into agent memory", on="2026-01-15", new_person=True)
+    # Someone from the import who moved jobs.
+    pid = g.ro_query("MATCH (p:Person)-[:WORKED_AT {current: true}]->(c:Company) WITH p, collect(c.name) AS jobs WHERE size(jobs) = 1"
+                     " AND NOT p.name STARTS WITH 'Kept' RETURN p.id LIMIT 1").result_set[0][0]
+    old_job = one("MATCH (:Person {id: $id})-[:WORKED_AT {current: true}]->(c) RETURN c.name", id=pid)
+    moved = memory.remember(g, "", person_id=pid, company="Moved Co", note="moved jobs")
+    # Someone the next import no longer has.
+    g.query("CREATE (:Person {id: 'gone-from-import', name: 'Gone Gia', search: 'gone gia', headline: 'x', company: 'Gia Co'})")
+    gone = memory.remember(g, "", person_id="gone-from-import", note='left "my" network \\ 網絡')
+    # A job and event already in the import: they must not double up.
+    known = g.ro_query("MATCH (p:Person)-[:WORKED_AT {current: true}]->(c:Company) WHERE p.id <> $id RETURN p.id, c.name LIMIT 1", {"id": pid}).result_set[0]
+    same_job = memory.remember(g, "", person_id=known[0], company=known[1], note="same job as before")
+    before = counts()
+
+    r = rebuild()
+    check(r.returncode == 0, "rebuild with notes works" + (": " + r.stderr[-300:] if r.returncode else ""))
+    check(f"Kept {before[0]['Note']} notes" in r.stdout, "rebuild says how many notes it kept")
+    check(not list(Path(REBUILD_HOME).rglob("notes-backup.json")), "rebuild removes its backup when done")
+    memory.setup(g)
+    check(counts() == before, "rebuild: same nodes and links as before")
+
+    check(memory.find(g, "Kept Kay", "Person")[0]["works_at"] == ["Kept Co"], "rebuild: new person and new company stay")
+    row = g.ro_query("MATCH (:Me)-[:WROTE]->(n:Note {id: $id})-[:ABOUT]->(p:Person), (p)-[m:MET_AT]->(e:Event {name: 'Kept Meetup'}), (p)-[:INTO]->(:Topic {name: 'Agent Memory'})"
+                     " RETURN n.text, n.on, e.date", {"id": new["note_id"]}).result_set
+    check(row == [["into agent memory", "2026-01-15", "2026-01-15"]], "rebuild: note, date, event and topic stay")
+    jobs = g.ro_query("MATCH (p:Person {id: $id})-[w:WORKED_AT]->(c) WHERE c.name IN [$old, 'Moved Co'] RETURN c.name, w.current, p.company ORDER BY c.name",
+                      {"id": pid, "old": old_job}).result_set
+    check(sorted(jobs) == sorted([["Moved Co", True, "Moved Co"], [old_job, False, "Moved Co"]]), "rebuild: a job change stays")
+    check(one("MATCH (p:Person {id: 'gone-from-import'}) RETURN p.name") == "Gone Gia", "rebuild: a person with notes stays when the import drops them")
+    check(one("MATCH (n:Note {id: $id}) RETURN n.text", id=gone["note_id"]) == 'left "my" network \\ 網絡', "rebuild: quotes and any script stay exact")
+
+    again = memory.remember(g, "Kept Kay", company="Kept Co", event="Kept Meetup", note="into agent memory", on="2026-01-15")
+    check(again["status"] == "already_saved", "rebuild: a repeat is still found")
+
+    # The notes still undo cleanly after the rebuild.
+    memory.forget(g, "note", moved["note_id"])
+    check(one("MATCH (p:Person {id: $id}) RETURN p.company", id=pid) != "Moved Co" and
+          one("MATCH (:Person {id: $id})-[:WORKED_AT {current: true}]->(c) RETURN c.name", id=pid) == old_job, "rebuild, then forget: the old job comes back")
+    memory.forget(g, "note", gone["note_id"])
+    check(one("MATCH (p:Person {id: 'gone-from-import'}) RETURN count(p)") == 0, "rebuild, then forget: a dropped person goes")
+    memory.forget(g, "note", new["note_id"])
+    check(one("MATCH (c:Company {name: 'Kept Co'}) RETURN count(c)") == 0, "rebuild, then forget: new company goes")
+    memory.forget(g, "note", same_job["note_id"])
+
+    # A rebuild that stopped halfway: the next one finds the notes in the backup.
+    kept = memory.remember(g, "Crash Cam", note="survives a crash", new_person=True)
+    backup_module = __import__("personal_brain.notes_backup", fromlist=["snapshot"])
+    backup = Path(REBUILD_HOME) / "data" / "notes-backup.json"
+    backup.parent.mkdir(parents=True, exist_ok=True)
+    backup.write_text(json.dumps(backup_module.snapshot(g)))
+    g.query("MATCH (n:Note) DETACH DELETE n")
+    r = rebuild()
+    memory.setup(g)
+    check(r.returncode == 0 and one("MATCH (n:Note {id: $id}) RETURN n.text", id=kept["note_id"]) == "survives a crash",
+          "rebuild after a crash: notes come back from the backup")
+
+    # --force is how you start over.
+    check(rebuild("--force").returncode == 0 and one("MATCH (n:Note) RETURN count(n)") == 0, "rebuild --force drops notes")
+    memory.setup(g)
+    check(counts() == plain_counts, "rebuild --force: back to a clean graph")
+
+
 def run(g):
+    run_rebuild(g)
     run_names(g)
     run_about(g)
     run_forget(g)

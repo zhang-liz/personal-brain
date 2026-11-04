@@ -9,8 +9,8 @@ Your own event labels and company skip list live in my_brain.json (not in git).
     personal-brain load                    # local Docker FalkorDB
     personal-brain load --sample --cloud   # the made-up network in sample_data/
 
-A rebuild replaces the graph. It stops if the graph holds notes from the agent
-(they would be lost); add --force to rebuild anyway.
+A rebuild replaces the graph, and keeps your agent's notes and what they added.
+--force drops them.
 """
 
 import csv
@@ -29,6 +29,7 @@ from zoneinfo import ZoneInfo
 
 from falkordb import FalkorDB
 
+from personal_brain import notes_backup
 from personal_brain.paths import HOME, PACKAGE, cloud_url
 SAMPLE = "--sample" in sys.argv
 SAMPLE_DIR = Path(os.environ.get("PB_SAMPLE_DIR", PACKAGE / "sample_data"))
@@ -581,11 +582,11 @@ def main():
     else:
         db = FalkorDB(host="localhost", port=6379)
     graph = db.select_graph(GRAPH)
-    if GRAPH in db.list_graphs() and "--force" not in sys.argv:
-        notes = graph.query("MATCH (n:Note) RETURN count(n)").result_set[0][0]
-        if notes:
-            sys.exit(f"Graph {GRAPH} holds {notes} notes from your agent, and a rebuild would lose them. "
-                     "Add --force to rebuild anyway.")
+    kept = None
+    if "--force" not in sys.argv:
+        kept = notes_backup.pending() or (notes_backup.snapshot(graph) if GRAPH in db.list_graphs() else None)
+        if kept and kept["nodes"]:
+            notes_backup.save(kept)
     try:
         graph.delete()
     except Exception:
@@ -658,6 +659,9 @@ def main():
     if me_city:
         graph.query("MATCH (m:Me), (c:City {id: $c}) CREATE (m)-[:LIVES_IN]->(c)", {"c": norm(me_city)})
     create_search_indexes(graph)
+    if kept and kept["nodes"]:
+        print(f"Kept {notes_backup.restore(graph, kept)} notes and what they added. Use --force to drop them.")
+    notes_backup.clear()
 
     nodes = graph.query("MATCH (n) RETURN labels(n)[0], count(n) ORDER BY count(n) DESC").result_set
     rels = graph.query("MATCH ()-[r]->() RETURN type(r), count(r) ORDER BY count(r) DESC").result_set
