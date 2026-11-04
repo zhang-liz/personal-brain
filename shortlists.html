@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shortlists</title>
+<!-- Ranked shortlists from the FalkorDB graph (spike/export_shortlists.py writes shortlists.json). -->
+<style>
+  :root {
+    color-scheme: dark;
+    --surface-0: #06070d;
+    --surface-1: #0e0f1a;
+    --border: rgba(255, 255, 255, 0.09);
+    --text-primary: #f0efec;
+    --text-secondary: #c3c2b7;
+    --text-muted: #8d8c85;
+    --accent: #9085e9;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--surface-0); color: var(--text-primary);
+    font: 14px/1.45 ui-sans-serif, -apple-system, "Segoe UI", Inter, sans-serif; }
+  main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; }
+  h1 { margin: 0; font-size: 22px; }
+  .meta { color: var(--text-muted); font-size: 12px; }
+  header a { color: var(--text-secondary); font-size: 13px; margin-left: auto; }
+  nav { display: flex; flex-wrap: wrap; gap: 6px; margin: 18px 0 12px; }
+  nav button { padding: 7px 12px; border-radius: 999px; border: 1px solid var(--border);
+    background: rgba(255,255,255,0.04); color: var(--text-primary); font: inherit; font-size: 13px; cursor: pointer; }
+  nav button small { color: var(--text-muted); margin-left: 4px; font-variant-numeric: tabular-nums; }
+  nav button.on { border-color: var(--accent); background: rgba(144,133,233,0.16); }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .bar input { flex: 1 1 240px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border);
+    background: rgba(255,255,255,0.05); color: var(--text-primary); font: inherit; outline: none; }
+  .bar input:focus { border-color: var(--accent); }
+  .bar a { color: var(--text-secondary); font-size: 13px; }
+  .note { color: var(--text-secondary); font-size: 12.5px; margin: 0 0 12px; max-width: 900px; }
+  .wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-1); }
+  table { width: 100%; border-collapse: collapse; min-width: 760px; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+  th { color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    position: sticky; top: 0; background: var(--surface-1); }
+  tr:last-child td { border-bottom: 0; }
+  td.num { font-variant-numeric: tabular-nums; color: var(--text-muted); white-space: nowrap; }
+  td.score { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+  td a { color: var(--text-primary); text-decoration: none; border-bottom: 1px solid rgba(144,133,233,0.5); }
+  td a:hover { border-bottom-color: var(--accent); }
+  .sub { display: block; color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+  .why { color: var(--text-secondary); font-size: 12.5px; }
+  .empty { padding: 24px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Shortlists</h1>
+    <span class="meta" id="meta"></span>
+    <a href="./">← Back to the graph</a>
+  </header>
+  <nav id="tabs"></nav>
+  <div class="bar">
+    <input id="filter" type="search" placeholder="Filter rows…" autocomplete="off" aria-label="Filter rows">
+    <a id="csv" download>Download CSV</a>
+  </div>
+  <p class="note" id="note"></p>
+  <div class="wrap"><table><thead id="head"></thead><tbody id="body"></tbody></table></div>
+</main>
+<script>
+// Column specs: [header, render(row) -> Node | string, className].
+const link = (text, url, sub) => {
+  const span = document.createElement("span");
+  const ok = /^https?:\/\//i.test(url || "");
+  const a = document.createElement(ok ? "a" : "span");
+  a.textContent = text;
+  if (ok) { a.href = url; a.target = "_blank"; a.rel = "noopener noreferrer"; }
+  span.append(a);
+  if (sub) { const s = document.createElement("span"); s.className = "sub"; s.textContent = sub; span.append(s); }
+  return span;
+};
+const two = (text, sub) => link(text, "", sub);
+const COLUMNS = {
+  cohosts: [
+    ["Company", (r) => two(r.company, r.funding || r.people)],
+    ["Why", (r) => r.why, "why"],
+    ["Ask", (r) => link(r.contact, r.contact_url, r.contact_title)],
+    ["Hosting soon", (r) => r.events, "why"],
+  ],
+  guests: [
+    ["Name", (r) => link(r.name, r.url, r.headline)],
+    ["Company", (r) => two(r.company, r.city)],
+    ["Why", (r) => r.why, "why"],
+    ["Warmth", (r) => r.warmth, "why"],
+  ],
+  speak: [
+    ["Date", (r) => new Date(r.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }), "num"],
+    ["Event", (r) => link(r.event, r.url, `${r.hosts}${r.guests ? ` · ${r.guests} going` : ""}`)],
+    ["Why", (r) => r.why, "why"],
+    ["How to get in", (r) => r.ask, "why"],
+  ],
+  organizers: [
+    ["Name", (r) => link(r.name, r.url, r.headline)],
+    ["Org", (r) => two(r.org, r.city)],
+    ["Why", (r) => r.why, "why"],
+  ],
+};
+const ORDER = ["cohosts", "guests", "speak", "organizers"];
+let data = null, current = location.hash.slice(1) || "cohosts";
+
+function render() {
+  const list = data.lists[current], cols = COLUMNS[current];
+  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.key === current));
+  document.getElementById("note").textContent = list.note;
+  document.getElementById("csv").href = `shortlists/${current}.csv`;
+  const head = document.getElementById("head"), body = document.getElementById("body");
+  head.replaceChildren(); body.replaceChildren();
+  const tr = document.createElement("tr");
+  for (const h of ["#", ...cols.map((c) => c[0]), "Score"]) { const th = document.createElement("th"); th.textContent = h; tr.append(th); }
+  head.append(tr);
+  const words = document.getElementById("filter").value.toLowerCase().split(/\s+/).filter(Boolean);
+  let shown = 0;
+  list.rows.forEach((r, i) => {
+    const text = Object.values(r).join(" ").toLowerCase();
+    if (!words.every((w) => text.includes(w))) return;
+    shown++;
+    const row = document.createElement("tr");
+    const cell = (content, cls) => { const td = document.createElement("td"); if (cls) td.className = cls;
+      td.append(content instanceof Node ? content : document.createTextNode(content ?? "")); row.append(td); };
+    cell(String(i + 1), "num");
+    for (const [, fn, cls] of cols) cell(fn(r), cls);
+    cell(String(r.score), "score");
+    body.append(row);
+  });
+  if (!shown) { const td = document.createElement("td"); td.colSpan = cols.length + 2; td.className = "empty";
+    td.textContent = "No rows match."; const row = document.createElement("tr"); row.append(td); body.append(row); }
+}
+
+fetch("shortlists.json", { cache: "no-store" }).then((r) => r.json()).then((d) => {
+  data = d;
+  document.getElementById("meta").textContent = `ranked from the graph on ${d.source} · ${d.generated}`;
+  const tabs = document.getElementById("tabs");
+  for (const key of ORDER) {
+    const b = document.createElement("button"); b.dataset.key = key;
+    b.append(d.lists[key].title);
+    const s = document.createElement("small"); s.textContent = `top ${d.lists[key].rows.length} of ${d.lists[key].total}`;
+    b.append(s);
+    b.onclick = () => { current = key; history.replaceState(null, "", `#${key}`); render(); };
+    tabs.append(b);
+  }
+  if (!d.lists[current]) current = "cohosts";
+  render();
+}).catch(() => {
+  document.getElementById("note").textContent = "No shortlists yet. Run: .venv/bin/python spike/export_shortlists.py --cloud";
+});
+document.getElementById("filter").oninput = () => data && render();
+</script>
+</body>
+</html>
