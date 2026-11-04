@@ -1,0 +1,33 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.12"]
+    services:
+      falkordb:
+        image: falkordb/falkordb:latest
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m venv .venv && .venv/bin/pip install -r requirements.txt
+      - name: Wait for FalkorDB
+        run: |
+          for i in $(seq 1 30); do
+            (exec 3<>/dev/tcp/localhost/6379) 2>/dev/null && exit 0
+            sleep 1
+          done
+          exit 1
+      - run: .venv/bin/python tests/test_memory.py
+      - run: .venv/bin/python tests/test_mcp_server.py
