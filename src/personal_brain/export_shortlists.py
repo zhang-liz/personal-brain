@@ -4,7 +4,7 @@ Each list is a few Cypher queries plus a transparent score, so every row says
 why it ranks where it does. Writes data/viewer/shortlists.json (for
 shortlists.html) and one CSV per list in data/viewer/shortlists/.
 
-    .venv/bin/python src/export_shortlists.py --cloud
+    personal-brain export --cloud
 """
 
 import csv
@@ -18,11 +18,11 @@ from pathlib import Path
 
 from falkordb import FalkorDB
 
-from load_graph import norm
+from personal_brain.load_graph import norm
 
-PROJECT = Path(__file__).resolve().parent.parent
-OUT = Path(os.environ.get("PB_VIEWER_DIR", PROJECT / "data" / "viewer"))
-SETTINGS = PROJECT / "my_brain.json"
+from personal_brain.paths import HOME, cloud_url
+OUT = Path(os.environ.get("PB_VIEWER_DIR", HOME / "data" / "viewer"))
+SETTINGS = HOME / "my_brain.json"
 TOP = 60
 
 SENIOR_RE = re.compile(r"\b(founder|co-?founder|ceo|cto|chief|head of|vp|vice president|director|principal"
@@ -48,9 +48,7 @@ GUEST_TOPIC_POINTS = {"Agent Memory": 3, "Knowledge Graphs": 2, "AI Agents": 1, 
 
 def connect():
     if "--cloud" in sys.argv:
-        env = (PROJECT / ".env").read_text().splitlines()
-        url = next(l.split("=", 1)[1].strip() for l in env if l.startswith("FALKORDB_URL="))
-        return FalkorDB.from_url(url), "FalkorDB Cloud"
+        return FalkorDB.from_url(cloud_url()), "FalkorDB Cloud"
     return FalkorDB(host="localhost", port=6379), "local FalkorDB"
 
 

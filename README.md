@@ -3,7 +3,7 @@
 Turn your LinkedIn network into a graph you can ask questions, stored in
 [FalkorDB](https://www.falkordb.com/), and fly through it in 3D.
 
-[![Personal Brain demo: a galaxy of 19k nodes answering questions](docs/demo.gif)](https://zhang-liz.github.io/personal-brain/)
+[![Personal Brain demo: a galaxy of 19k nodes answering questions](https://raw.githubusercontent.com/zhang-liz/personal-brain/main/docs/demo.gif)](https://zhang-liz.github.io/personal-brain/)
 
 **[Try the live demo](https://zhang-liz.github.io/personal-brain/)**. All connections in it are made up, and its companies and events are only example names. To rebuild it, see `scripts/build_demo.py`.
 
@@ -32,50 +32,56 @@ Everything runs on your laptop. The viewer works offline (three.js is vendored).
 
 ## Quick start: a sample network in 5 minutes
 
-`sample_data/` is a made-up network (241 invented people, startups and events) in the same file formats as a real LinkedIn export, so you can try everything before you download your own data.
+You need [uv](https://docs.astral.sh/uv/getting-started/installation/) and FalkorDB. `uvx` downloads the right Python for you.
 
-You need Python 3.10 or newer. Check with `python3 --version`. macOS comes with 3.9: run `brew install python@3.12`, then use `python3.12` in place of `python3`.
+The made-up sample network has 241 invented people, startups and events, in the same file formats as a real LinkedIn export. You can try everything before you download your own data.
 
-```bash
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-cp .env.example .env            # paste your FalkorDB Cloud URL into FALKORDB_URL
-.venv/bin/python src/load_graph.py --sample --cloud
-```
-
-A free [FalkorDB Cloud](https://app.falkordb.cloud/) instance is the fastest start. To run FalkorDB locally instead, start it with Docker and leave out `--cloud`:
+**1. Start FalkorDB.** Run it in Docker, or see [FalkorDB Cloud](#falkordb-cloud):
 
 ```bash
 docker run -p 6379:6379 -p 3000:3000 -it --rm falkordb/falkordb:latest
 ```
 
-Then open Claude Code in this folder. It finds `.mcp.json` and asks to start the `personal-brain` server. Try:
+**2. Load the sample, and add the server to Claude Code:**
+
+```bash
+uvx personal-brain load --sample
+claude mcp add personal-brain -- uvx personal-brain mcp
+```
+
+Try:
 
 - "Who in my network works at Kestrel Graph?"
 - "Who could introduce me to someone at a well-funded startup?"
 - "I met Oskar Mensah at the Graph & RAG Meetup. He's building agent memory." (There are two Oskar Mensahs, so it asks which one.)
 - "Forget that note."
 
+**Other MCP clients:** use command `uvx`, arguments `personal-brain mcp` (stdio).
+
+### FalkorDB Cloud
+
+A free [FalkorDB Cloud](https://app.falkordb.cloud/) instance works without Docker. Pass its URL to the server, and add `--cloud` to `load` and `export`:
+
+```bash
+export FALKORDB_URL='falkors://user:password@host:port'
+uvx personal-brain load --sample --cloud
+claude mcp add personal-brain -e FALKORDB_URL="$FALKORDB_URL" -- uvx personal-brain mcp
+```
+
+Or put `FALKORDB_URL=...` in `~/.personal-brain/.env`.
+
 ## Use it as your agent's memory (MCP)
 
-`src/mcp_server.py` gives your agent four tools on one graph:
+`uvx personal-brain mcp` gives your agent four tools on one graph:
 
 | Tool | What it does |
 |---|---|
 | `remember` | Saves who you met, where they work and where you met. Matches the name to people already in the graph. When it is not sure which person you mean, it saves nothing and asks. A new company ends the old job and keeps it in the history. |
-| `find` | Finds people, companies and events by name, typos and missing accents included. |
+| `find` | Finds people, companies and events by name, in any script, typos and missing accents included. |
 | `ask` | Runs a read-only Cypher query (FalkorDB refuses writes), with a 5 second limit and at most 50 rows. The tool description carries the schema. |
 | `forget` | Forgets one note and everything it added, one relationship, or one person. A forgotten person stays out of future rebuilds. |
 
-Every write hangs off a `Note` node, so you can trace each fact to the note that made it. Claude Code reads `.mcp.json`, from this folder or any folder inside it. For another client, give full paths: command `/path/to/personal-brain/.venv/bin/python`, argument `/path/to/personal-brain/src/mcp_server.py` (stdio). `PB_GRAPH` picks the graph (default `network`). Windows is not tested: `.mcp.json` will not work there, so use full paths, with `.venv\Scripts\python.exe`.
-
-If FalkorDB is not running, the server still starts, and each tool says how to start it.
-
-Check it end to end on a throwaway graph, with local FalkorDB running:
-
-```bash
-.venv/bin/python tests/test_memory.py       # the memory tools (add --cloud to use FALKORDB_URL)
-.venv/bin/python tests/test_mcp_server.py   # the server, started the way an agent starts it
-```
+Every write hangs off a `Note` node, so you can trace each fact to the note that made it. `PB_GRAPH` picks the graph (default `network`). If FalkorDB is not running, the server still starts, and each tool says how to start it. Windows is not tested.
 
 ## How it works
 
@@ -110,86 +116,84 @@ data/enriched/ ────────┘   (graph "network")            ├─
 
 ## Build your own
 
-You need Python 3.10+ and FalkorDB (a free [FalkorDB Cloud](https://app.falkordb.cloud/)
-instance, or Docker).
-
 **1. Get your LinkedIn data.** LinkedIn > Settings > Data privacy > Get a copy of your data.
 Two choices:
 
 - **Connections only**: usually ready in about 10 minutes. You get people, their current company and title, and the day you connected. That is enough for the graph, events and the agent tools.
 - **Download larger data archive**: ready in about a day. It adds your messages (only counts are used), posts, jobs and schools.
 
-Unzip it into this folder (the folder name contains `LinkedInDataExport`).
+Unzip it into `~/.personal-brain` (the folder name contains `LinkedInDataExport`). `personal-brain --help` shows your data folder. To use another folder, set `PB_HOME`.
 
 **Or start empty.** Skip the import. The MCP server creates you in an empty graph, and the graph grows as you tell your agent who you met.
 
-**2. Install.**
+Optional: copy [`my_brain.example.json`](my_brain.example.json) to `~/.personal-brain/my_brain.json` to name your events and list competitors.
+
+**2. Build the graph and the viewer data.** Add `--cloud` to both when you use FalkorDB Cloud:
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-cp .env.example .env                  # add your FALKORDB_URL
-cp my_brain.example.json my_brain.json  # optional: name your events, list competitors
+uvx personal-brain load
+uvx personal-brain export
 ```
 
-For local FalkorDB instead of Cloud:
+**3. Open it.**
 
 ```bash
-docker run -p 6379:6379 -p 3000:3000 -it --rm falkordb/falkordb:latest
-```
-
-Then leave out `--cloud` in the commands below.
-
-**3. Build the graph and the viewer data.**
-
-```bash
-.venv/bin/python src/load_graph.py --cloud
-.venv/bin/python src/export_graph.py --cloud
-.venv/bin/python src/layout_graph.py --dims=2
-.venv/bin/python src/export_stories.py --cloud
-.venv/bin/python src/export_shortlists.py --cloud
-```
-
-**4. Open it.**
-
-```bash
-./src/serve_viewer.sh
+uvx personal-brain view
 ```
 
 Open http://127.0.0.1:8765 (shortlists: http://127.0.0.1:8765/shortlists.html). Keys: `2` / `3` switch views, `T` time-lapse, `B` big bang, `D` demo, `Esc` reset.
 
-To explore in the FalkorDB Browser instead, see `src/demo_queries.cypher`.
+To explore in the FalkorDB Browser instead, see `docs/demo_queries.cypher`.
+
+## Work on the code
+
+You need Python 3.10 or newer, [uv](https://docs.astral.sh/uv/getting-started/installation/) and Docker. In a clone, your data folder is the clone itself, and Claude Code reads `.mcp.json` from any folder inside it.
+
+```bash
+git clone https://github.com/zhang-liz/personal-brain && cd personal-brain
+python3 -m venv .venv && .venv/bin/pip install -e .
+docker run -p 6379:6379 -p 3000:3000 -it --rm falkordb/falkordb:latest
+```
+
+Then, in another terminal, run the tests. They use throwaway graphs:
+
+```bash
+.venv/bin/python tests/test_memory.py       # the memory tools (add --cloud to use FALKORDB_URL)
+.venv/bin/python tests/test_mcp_server.py   # the server, started the way an agent starts it
+.venv/bin/python tests/test_package.py      # the built package, used from another folder
+```
 
 ## Your data stays yours
 
-- The LinkedIn export, everything in `data/`, `.env` and `my_brain.json` are in `.gitignore`. Never commit them.
+- Your data stays in `~/.personal-brain`, outside the package. Only you can open that folder. In a clone, the export, `data/`, `.env` and `my_brain.json` are in `.gitignore`. Never commit them.
 - Message text is never read into the graph, only how many messages you exchanged with each person.
-- `data/viewer/graph.json` and the shortlists hold real names. Share screenshots, not those files.
+- `data/viewer/graph.json` and the shortlists in your data folder hold real names. Share screenshots, not those files.
 - The local server listens on `127.0.0.1` only and serves only `data/viewer/`.
 
 ## Files
 
 | Path | What it does |
 |---|---|
-| `src/load_graph.py` | Builds the FalkorDB graph and all inferred links |
-| `src/export_graph.py` | Exports every node and edge to `data/viewer/graph.json` |
-| `src/layout_graph.py` | Precomputes the layout |
-| `src/export_stories.py` | The "Ask the graph" questions and their Cypher |
-| `src/export_shortlists.py` | Ranked shortlists: co-hosts & sponsors, podcast guests, places to speak |
-| `src/viewer/shortlists.html` | The shortlists page (filter, download CSV) |
-| `src/server.py` | Serves the viewer and the live Remember / Forget API |
-| `src/memory.py` | The memory itself: remember, find, ask, forget (used by the MCP server and the viewer) |
-| `src/mcp_server.py` | The MCP server for Claude Code and other agents |
-| `.mcp.json` | Tells Claude Code how to start the MCP server |
-| `tests/test_memory.py` | End-to-end check of the memory tools on a throwaway graph |
-| `tests/test_mcp_server.py` | End-to-end check of the MCP server over stdio |
-| `sample_data/` | The made-up sample network |
+| `src/personal_brain/cli.py` | The `personal-brain` command |
+| `src/personal_brain/paths.py` | Where your data folder is |
+| `src/personal_brain/load_graph.py` | Builds the FalkorDB graph and all inferred links |
+| `src/personal_brain/export_graph.py` | Exports every node and edge to `data/viewer/graph.json` |
+| `src/personal_brain/layout_graph.py` | Precomputes the layout |
+| `src/personal_brain/export_stories.py` | The "Ask the graph" questions and their Cypher |
+| `src/personal_brain/export_shortlists.py` | Ranked shortlists: co-hosts & sponsors, podcast guests, places to speak |
+| `src/personal_brain/viewer/shortlists.html` | The shortlists page (filter, download CSV) |
+| `src/personal_brain/server.py` | Serves the viewer and the live Remember / Forget API |
+| `src/personal_brain/memory.py` | The memory itself: remember, find, ask, forget (used by the MCP server and the viewer) |
+| `src/personal_brain/mcp_server.py` | The MCP server for Claude Code and other agents |
+| `.mcp.json` | Tells Claude Code how to start the MCP server in a clone |
+| `tests/` | End-to-end checks of the memory tools, the MCP server and the built package, on throwaway graphs |
+| `src/personal_brain/sample_data/` | The made-up sample network |
 | `scripts/make_sample_data.py` | Writes `sample_data/` |
-| `src/viewer/index.html` | The WebGL viewer (three.js r170, MIT, vendored) |
-| `src/demo_queries.cypher` | Queries to paste into the FalkorDB Browser |
+| `src/personal_brain/viewer/index.html` | The WebGL viewer (three.js r170, MIT, vendored) |
+| `docs/demo_queries.cypher` | Queries to paste into the FalkorDB Browser |
 
 This is a demo-quality build made at a hackathon, not a product.
 
 ## License
 
-MIT, see [LICENSE](LICENSE). three.js in `src/viewer/vendor/` is MIT too (its own LICENSE file).
+MIT, see [LICENSE](LICENSE). three.js in `src/personal_brain/viewer/vendor/` is MIT too (its own LICENSE file).

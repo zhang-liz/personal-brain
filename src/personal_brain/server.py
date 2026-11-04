@@ -7,23 +7,21 @@ adds a tiny API that talks to FalkorDB (Cloud or local) live:
     POST /api/remember        {"text": "Met Maya from Supabase at AI Engineer Summit, runs events"}
     POST /api/forget          undo every remembered note (see memory.py)
 
-Only data/viewer/ is served, never the project root (.env lives there).
+Only data/viewer/ is served, never your data folder (.env lives there).
 """
 
 import json
 import re
-import sys
+import shutil
 import time
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-PROJECT = Path(__file__).resolve().parent.parent
-ROOT = PROJECT / "data" / "viewer"
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import memory  # noqa: E402
-from load_graph import TOPIC_RE  # noqa: E402
+from personal_brain.paths import HOME, PACKAGE
+ROOT = HOME / "data" / "viewer"
+from personal_brain import memory
+from personal_brain.load_graph import TOPIC_RE
 
 # FALKORDB_URL in .env = FalkorDB Cloud; empty = local Docker FalkorDB on localhost:6379.
 GRAPH, SOURCE = memory.connect()
@@ -148,7 +146,12 @@ class Handler(SimpleHTTPRequestHandler):
             super().log_message(fmt, *args)
 
 
-if __name__ == "__main__":
+def main():
+    shutil.copytree(PACKAGE / "viewer", ROOT, dirs_exist_ok=True)
     server = ThreadingHTTPServer(("127.0.0.1", 8765), partial(Handler, directory=str(ROOT)))
     print(f"serving http://127.0.0.1:8765 (live API on {SOURCE})")
     server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()

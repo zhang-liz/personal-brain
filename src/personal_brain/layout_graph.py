@@ -3,7 +3,7 @@
 Reads data/viewer/graph.json (from export_graph.py), runs igraph's DrL layout
 in 2D and 3D, and writes the positions back into the same file.
 
-    .venv/bin/python src/layout_graph.py
+    personal-brain export   # runs this after export_graph
 """
 
 import json
@@ -14,8 +14,8 @@ from pathlib import Path
 
 import igraph as ig
 
-PROJECT = Path(__file__).resolve().parent.parent
-GRAPH_JSON = Path(os.environ.get("PB_VIEWER_DIR", PROJECT / "data" / "viewer")) / "graph.json"
+from personal_brain.paths import HOME
+GRAPH_JSON = Path(os.environ.get("PB_VIEWER_DIR", HOME / "data" / "viewer")) / "graph.json"
 RADIUS = 1000.0
 # "Me" links to everyone, which would crush the map into one ball: leave those
 # links out of the layout and put Me at the center afterwards. Skill links are

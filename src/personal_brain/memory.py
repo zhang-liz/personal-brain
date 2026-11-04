@@ -14,9 +14,9 @@ from pathlib import Path
 
 from falkordb import FalkorDB, Edge, Node, Path as GraphPath
 
-from load_graph import EVENT_ROLE_RE, FORGOTTEN, TOPIC_RE, create_search_indexes, fold, norm
+from personal_brain.load_graph import EVENT_ROLE_RE, FORGOTTEN, TOPIC_RE, create_search_indexes, fold, norm
 
-PROJECT = Path(__file__).resolve().parent.parent
+from personal_brain.paths import HOME, env_file_url
 MAX_ROWS = 50        # rows ask() hands back to the agent
 TIMEOUT_MS = 5000    # longest an ask() query may run
 
@@ -39,10 +39,7 @@ Community & Events, Partnerships, Investing, Founder, Podcast & Media."""
 
 def connect(graph=None):
     """The graph on FalkorDB Cloud (FALKORDB_URL in the environment or .env), else local FalkorDB."""
-    env_file = PROJECT / ".env"
-    env = env_file.read_text().splitlines() if env_file.exists() else []
-    url = os.environ["FALKORDB_URL"] if "FALKORDB_URL" in os.environ else next(
-        (l.split("=", 1)[1].strip() for l in env if l.startswith("FALKORDB_URL=")), "")
+    url = os.environ["FALKORDB_URL"] if "FALKORDB_URL" in os.environ else env_file_url()
     db = FalkorDB.from_url(url) if url else FalkorDB(host="localhost", port=6379)
     return db.select_graph(graph or os.environ.get("PB_GRAPH", "network")), ("FalkorDB Cloud" if url else "local FalkorDB")
 
@@ -310,7 +307,7 @@ def forget_person(g, pid):
         forget_note(g, nid)
     g.query("MATCH (p:Person {id: $id}) DETACH DELETE p", {"id": pid})
     forgotten = set(json.loads(FORGOTTEN.read_text())) if FORGOTTEN.exists() else set()
-    FORGOTTEN.parent.mkdir(exist_ok=True)
+    FORGOTTEN.parent.mkdir(parents=True, exist_ok=True)
     FORGOTTEN.write_text(json.dumps(sorted(forgotten | {pid}), indent=1))
     return {"forgot": "person", "name": rows[0][0], "notes": len(notes), "kept_out_of_rebuilds": True}
 

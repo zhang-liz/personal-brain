@@ -14,7 +14,7 @@ import unicodedata
 from datetime import date, timedelta
 from pathlib import Path
 
-OUT = Path(__file__).resolve().parent.parent / "sample_data"
+OUT = Path(__file__).resolve().parent.parent / "src" / "personal_brain" / "sample_data"
 rnd = random.Random(7)
 
 FIRST = ["Sana", "Jonas", "Tomás", "Amara", "Kenji", "Lucía", "Mateo", "Ifeoma", "Noor", "Elif", "Rafael", "Hana",
