@@ -22,6 +22,7 @@ from urllib.parse import parse_qs, urlparse
 from personal_brain.paths import HOME, NO_GRAPH, PACKAGE, graph_missing
 from personal_brain import activity, memory
 from personal_brain.load_graph import TOPIC_RE
+from personal_brain.notes_backup import every_row
 
 ROOT = HOME / "data" / "viewer"
 
@@ -73,13 +74,13 @@ def node_json(nid, label, name, sub, when):
 
 
 def delta(since):
-    nodes = [node_json(*row) for row in q(
-        "MATCH (n) WHERE id(n) >= $s OR n.source = 'agent' RETURN id(n), labels(n)[0], n.name,"
-        " coalesce(n.headline, n.title, n.funding, n.summary, ''), coalesce(n.connected_on, n.date, '')",
-        {"s": since}).result_set]
-    edges = [{"s": a, "t": b, "type": t} for a, b, t in q(
-        "MATCH (a)-[r]->(b) WHERE id(a) >= $s OR id(b) >= $s OR r.note IS NOT NULL RETURN id(a), id(b), type(r)",
-        {"s": since}).result_set]
+    nodes = [node_json(*row) for row in every_row(
+        GRAPH, "MATCH (n) WITH n, id(n) AS at WHERE (at >= $s OR n.source = 'agent')",
+        "id(n), labels(n)[0], n.name, coalesce(n.headline, n.title, n.funding, n.summary, ''), coalesce(n.connected_on, n.date, '')",
+        {"s": since})]
+    edges = [{"s": a, "t": b, "type": t} for a, b, t in every_row(
+        GRAPH, "MATCH (a)-[r]->(b) WITH a, b, r, id(r) AS at WHERE (id(a) >= $s OR id(b) >= $s OR r.note IS NOT NULL)",
+        "id(a), id(b), type(r)", {"s": since})]
     return {"nodes": nodes, "edges": edges}
 
 

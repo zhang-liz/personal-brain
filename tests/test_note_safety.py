@@ -694,11 +694,10 @@ def test_a_retry_in_other_case_or_spacing_is_a_repeat(box, retry):
 
 # ---------- ended_jobs must not say saved when it ended nothing ----------
 
-@pytest.mark.parametrize("company", ["", "Stay Co"])
-def test_ended_jobs_without_a_new_company_saves_nothing(box, company):
+def test_one_job_in_both_company_and_ended_jobs_saves_nothing(box):
     box.load([row("Eli", "Ended", "Stay Co")], (), "--force")
     with pytest.raises(ValueError, match="ended_jobs"):
-        memory.remember(box.g, "", person_id="eli-ended", company=company, ended_jobs=["Stay Co"])
+        memory.remember(box.g, "", person_id="eli-ended", company="Stay Co", ended_jobs=["Stay Co"])
     assert box.current("eli-ended") == ["Stay Co"]
     assert box.notes() == []
 
@@ -726,3 +725,131 @@ def test_forget_person_is_on_the_list_even_if_the_delete_stops(box, monkeypatch)
     with pytest.raises(RuntimeError):
         memory.forget_person(box.g, "gil-halfway")
     assert "gil-halfway" in json.loads(memory.FORGOTTEN.read_text(encoding="utf-8"))
+
+
+# ---------- someone left a job, with no new one ----------
+
+def company_of(box, pid):
+    return box.person(pid, "company")[0]
+
+
+def test_ended_jobs_alone_ends_the_job_and_is_not_a_meeting(box):
+    box.load([row("Lea", "Left", "Stay Co")], (), "--force")
+    r = memory.remember(box.g, "", person_id="lea-left", ended_jobs=["Stay Co"])
+    assert r["status"] == "saved" and r["changes"] == ["ended: Stay Co"]
+    assert box.current("lea-left") == [] and company_of(box, "lea-left") == ""
+    assert box.rows("MATCH (:Me)-[r:MET]->(:Person {id: 'lea-left'}) RETURN count(r)")[0][0] == 0
+    assert memory.remember(box.g, "", person_id="lea-left", ended_jobs=["Stay Co"])["status"] == "already_saved"
+
+
+def test_forgetting_it_brings_the_job_back(box):
+    box.load([row("Lon", "Back", "Stay Co")], (), "--force")
+    r = memory.remember(box.g, "", person_id="lon-back", ended_jobs=["Stay Co"])
+    assert memory.forget_note(box.g, r["note_id"])["jobs_reopened"] == 1
+    assert box.current("lon-back") == ["Stay Co"] and company_of(box, "lon-back") == "Stay Co"
+
+
+def test_ended_jobs_keeps_the_other_job(box):
+    box.load([row("Ann", "Two", "One Co")], (), "--force")
+    memory.remember(box.g, "", person_id="ann-two", company="Two Co", ended_jobs=[], note="also advises")
+    memory.remember(box.g, "", person_id="ann-two", ended_jobs=["Two Co"])
+    assert box.current("ann-two") == ["One Co"] and company_of(box, "ann-two") == "One Co"
+    memory.remember(box.g, "", person_id="ann-two", ended_jobs=["One Co"])
+    assert box.current("ann-two") == [] and company_of(box, "ann-two") == ""
+
+
+def test_a_same_job_note_can_end_the_other_job(box):
+    box.load([row("Sam", "Same", "One Co")], (), "--force")
+    memory.remember(box.g, "", person_id="sam-same", company="Two Co", ended_jobs=[], note="also advises")
+    r = memory.remember(box.g, "", person_id="sam-same", company="One Co", ended_jobs=["Two Co"], note="only this one now")
+    assert r["status"] == "saved" and box.current("sam-same") == ["One Co"]
+    memory.forget_note(box.g, r["note_id"])
+    assert box.current("sam-same") == ["One Co", "Two Co"]
+
+
+def test_it_can_end_only_a_current_job(box):
+    box.load([row("Kim", "Wrong", "One Co")], (), "--force")
+    with pytest.raises(ValueError, match="not a current job"):
+        memory.remember(box.g, "", person_id="kim-wrong", ended_jobs=["Other Co"])
+    assert box.notes() == []
+
+
+@pytest.mark.parametrize("order", [(0, 1), (1, 0)])
+def test_left_then_new_job_forgotten_in_either_order(box, order):
+    box.load([row("Ned", "Next", "Old Co")], (), "--force")
+    notes = [memory.remember(box.g, "", person_id="ned-next", ended_jobs=["Old Co"])["note_id"],
+             memory.remember(box.g, "", person_id="ned-next", company="New Co", note="started there")["note_id"]]
+    assert box.current("ned-next") == ["New Co"] and company_of(box, "ned-next") == "New Co"
+    for i in order:
+        memory.forget_note(box.g, notes[i])
+    assert box.current("ned-next") == ["Old Co"] and company_of(box, "ned-next") == "Old Co"
+
+
+def test_a_job_can_end_and_start_again_with_the_same_words(box):
+    box.load([row("Ray", "Return", "Old Co")], (), "--force")
+    memory.remember(box.g, "", person_id="ray-return", ended_jobs=["Old Co"])
+    memory.remember(box.g, "", person_id="ray-return", company="Old Co", note="came back")
+    r = memory.remember(box.g, "", person_id="ray-return", ended_jobs=["Old Co"])
+    assert r["status"] == "saved" and box.current("ray-return") == []
+
+
+def test_a_rebuild_keeps_the_job_ended(box):
+    people = [row("Tia", "Gone", "Old Co")]
+    box.load(people, (), "--force")
+    r = memory.remember(box.g, "", person_id="tia-gone", ended_jobs=["Old Co"])
+    box.load(people)
+    assert box.current("tia-gone") == [] and company_of(box, "tia-gone") == ""
+    memory.forget_note(box.g, r["note_id"])
+    assert box.current("tia-gone") == ["Old Co"] and company_of(box, "tia-gone") == "Old Co"
+
+
+# ---------- every search reads past the row limit ----------
+
+def low_row_limit(rows=30):
+    db = memory.FalkorDB().connection
+    size = db.execute_command("GRAPH.CONFIG", "GET", "RESULTSET_SIZE")[1]
+    db.execute_command("GRAPH.CONFIG", "SET", "RESULTSET_SIZE", rows)
+    return lambda: db.execute_command("GRAPH.CONFIG", "SET", "RESULTSET_SIZE", size)
+
+
+def test_about_reads_past_the_row_limit(box):
+    box.load([row("Wes", f"Word{i}", "Word Co", "Zebra keeper") for i in range(40)], (), "--force")
+    memory.remember(box.g, "", person_id="wes-word0", note="zebra chat")
+    whole = memory.about(box.g, "zebra")
+    restore = low_row_limit()
+    try:
+        capped = memory.about(box.g, "zebra")
+    finally:
+        restore()
+    assert capped == whole and capped["found"] == 40
+
+
+def test_forget_all_notes_goes_past_the_row_limit(box):
+    box.load([row("Nan", "Many", "Many Co")], (), "--force")
+    for i in range(130):
+        memory.remember(box.g, "", person_id="nan-many", note=f"note {i}")
+    restore = low_row_limit(100)    # not lower: the client reads the graph's field names with a query too
+    try:
+        memory.forget_all_notes(box.g)
+    finally:
+        restore()
+    assert box.notes() == []
+
+
+def test_a_person_with_a_skill_twice_shows_it_once(box):
+    box.load([], (), "--force")
+    people = memory.about(box.g, "python")["people"]
+    assert any(w["from"] == "skill" for p in people for w in p["why"])
+    for p in people:
+        assert len(p["why"]) == len({(w["from"], w["text"]) for w in p["why"]})
+
+
+@pytest.mark.parametrize("seed", range(3))
+def test_company_follows_the_job_after_several_forgets(box, seed):
+    box.load([row("Cal", "Company", "Old Co")], (), "--force")
+    notes = [memory.remember(box.g, "", person_id="cal-company", company="Third Co", note="moved")["note_id"],
+             memory.remember(box.g, "", person_id="cal-company", company="Old Co", ended_jobs=[], note="back part time")["note_id"],
+             memory.remember(box.g, "", person_id="cal-company", company="Third Co", ended_jobs=["Old Co"], note="moved again")["note_id"]]
+    for i in [(0, 1, 2), (2, 1, 0), (1, 0, 2)][seed]:
+        memory.forget_note(box.g, notes[i])
+    assert box.current("cal-company") == ["Old Co"] and company_of(box, "cal-company") == "Old Co"

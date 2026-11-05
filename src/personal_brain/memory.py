@@ -20,6 +20,7 @@ from falkordb import FalkorDB, Edge, Node, Path as GraphPath
 from personal_brain.companies import core, one_edit, same_company, typo
 from personal_brain.load_graph import EVENT_ROLE_RE, FORGOTTEN, TOPIC_RE, city_of, create_search_indexes, fold, forgotten_list, norm, without_accents
 
+from personal_brain.notes_backup import every_row, sync_company
 from personal_brain.paths import env_file_url, open_url
 MAX_ROWS = 50        # rows ask() hands back to the agent
 TIMEOUT_MS = 5000    # longest an ask() query may run
@@ -115,10 +116,10 @@ def find(g, text, label=None, limit=10):
 
 # Where about() looks, best first: your own words come before what LinkedIn says.
 ABOUT = {
-    "note": "MATCH (x:Note)-[:ABOUT]->(p:Person) WHERE {} RETURN p.id, p.name, x.text",
-    "topic": "MATCH (p:Person)-[:INTO]->(t:Topic) WHERE {} RETURN p.id, p.name, t.name",
-    "skill": "MATCH (p:Person)-[:HAS_SKILL|HAS_EXPERIENCE]->(s:Skill) WHERE {} RETURN DISTINCT p.id, p.name, s.name",
-    "headline": "MATCH (p:Person) WHERE {} RETURN p.id, p.name, p.headline",
+    "note": "MATCH (x:Note)-[r:ABOUT]->(p:Person) WITH p, x, id(r) AS at WHERE {}",
+    "topic": "MATCH (p:Person)-[r:INTO]->(t:Topic) WITH p, t, id(r) AS at WHERE {}",
+    "skill": "MATCH (p:Person)-[r:HAS_SKILL|HAS_EXPERIENCE]->(s:Skill) WITH p, s, id(r) AS at WHERE {}",
+    "headline": "MATCH (p:Person) WITH p, id(p) AS at WHERE {}",
 }
 ABOUT_FIELD = {"note": "x.text", "topic": "t.name", "skill": "s.name", "headline": "p.headline"}
 ABOUT_LIMIT = 20
@@ -137,9 +138,12 @@ def about(g, text):
         raise ValueError("Give some words to look for.")
     people = {}
     for rank, (source, cypher) in enumerate(ABOUT.items()):
-        where = f"all(w IN $words WHERE toLower({ABOUT_FIELD[source]}) CONTAINS w)"
-        for pid, name, found in g.ro_query(cypher.format(where), {"words": words}, timeout=TIMEOUT_MS).result_set:
-            if has_word_starts(found, words):
+        field = ABOUT_FIELD[source]
+        where = f"all(w IN $words WHERE toLower({field}) CONTAINS w)"
+        seen = set()    # a skill can come through two links
+        for pid, name, found in every_row(g, cypher.format(where), f"p.id, p.name, {field}", {"words": words}, TIMEOUT_MS):
+            if (pid, found) not in seen and has_word_starts(found, words):
+                seen.add((pid, found))
                 person = people.setdefault(pid, {"id": pid, "name": name, "rank": rank, "why": []})
                 person["why"].append({"from": source, "text": found})
     best = sorted(people.values(), key=lambda p: (p["rank"], -len(p["why"]), p["name"]))[:ABOUT_LIMIT]
@@ -219,7 +223,7 @@ def saved_before(g, key, person, company, event, note):
                       {"key": key, "ids": ids}).result_set
 
 
-def still_true(g, nid, pid, fields, company, follow_up):
+def still_true(g, nid, pid, fields, company, follow_up, ended_jobs=None):
     """A retry changes nothing. If what the earlier note said has changed since, the same words are news."""
     if fields:
         now = g.ro_query("MATCH (p:Person {id: $pid}) RETURN " + ", ".join(f"p.{f}" for f in fields), {"pid": pid}).result_set[0]
@@ -232,6 +236,11 @@ def still_true(g, nid, pid, fields, company, follow_up):
     if follow_up:
         rows = g.ro_query("MATCH (f:FollowUp {note: $nid}) RETURN f.open", {"nid": nid}).result_set
         if not (rows and rows[0][0]):
+            return False
+    if ended_jobs:
+        # They went back to the job since, so ending it again is news.
+        jobs = g.ro_query("MATCH (:Person {id: $pid})-[:WORKED_AT {current: true}]->(c:Company) RETURN c.id, c.name", {"pid": pid}).result_set
+        if any(c == norm(job) or fold(name) == fold(job) for c, name in jobs for job in ended_jobs):
             return False
     return True
 
@@ -364,7 +373,7 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
     if not name and not person_id:
         raise ValueError("Give a name, or a person_id from find.")
     fields = {f: v for f, v in zip(FIELDS, (title, location, email)) if v}
-    met = bool(note or event or company) or not (fields or follow_up or done)    # a correction or a to-do is not a meeting
+    met = bool(note or event or company) or not (fields or follow_up or done or ended_jobs)    # a correction or a to-do is not a meeting
     day = meeting_date(on)
     clean_half_saved(g)
     person, candidates = resolve(g, name, company, person_id, new_person)
@@ -377,11 +386,12 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
         text = note or " ".join(x for x in [f"Met {person['name']}", company and f"from {company}", event and f"at {event}"] if x)
     else:
         text = ". ".join(x for x in ["Updated " + ", ".join(f"{f}: {v}" for f, v in fields.items()) if fields else "",
-                                     f"Follow up: {follow_up}" if follow_up else "", f"Done: {done[1]}" if done else ""] if x)
-    extra = {**fields, "follow_up": follow_up, "due": due or "", "done": follow_up_done}
+                                     f"Follow up: {follow_up}" if follow_up else "", f"Done: {done[1]}" if done else "",
+                                     f"Ended: {', '.join(ended_jobs)}" if ended_jobs else ""] if x)
+    extra = {**fields, "follow_up": follow_up, "due": due or "", "done": follow_up_done, "ended": sorted(as_said(j) for j in ended_jobs or [])}
     key = repeat_key(company, event, text, day, {k: v for k, v in extra.items() if v})
     before = next((b for b in saved_before(g, key, person, company, event, note or fields or follow_up)
-                   if still_true(g, b[0], b[1], fields, company, follow_up)), None)
+                   if still_true(g, b[0], b[1], fields, company, follow_up, ended_jobs)), None)
     if before:
         return {"status": "already_saved", "note_id": before[0], "person": {"id": before[1], "name": before[2], "new": False},
                 "changes": [], "ms": 0.0, "undo": f"personal-brain forget note {before[0]}"}
@@ -401,15 +411,14 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
         said_other_name = bool(same_job) and core(said) != core(cid)
     else:
         new_job = said_other_name = False
-    if ended_jobs and not new_job:
-        raise ValueError("Nothing was saved: ended_jobs only works with a new company in company. "
-                         "If they left with no new job, the job stays current: say so in a note.")
     if new_job and ended_jobs is None and len(now) > 1:
         jobs = [cname for _, cname in now]
         return {"status": "needs_jobs", "person": person, "current_jobs": jobs,
                 "message": f"{person['name']} has {len(jobs)} current jobs: {', '.join(jobs)}. Ask the user which ones ended, then call "
                            "remember again with ended_jobs (an empty list if none ended)."}
     ended = [c for c, _ in now] if ended_jobs is None else jobs_that_ended(now, ended_jobs, person["name"])
+    if ended_jobs and not new_job and cid in ended:
+        raise ValueError(f"Nothing was saved: {company} is in both company and ended_jobs. Pick one.")
 
     nid = "note-" + uuid.uuid4().hex[:12]
     fid = "followup-" + uuid.uuid4().hex[:12] if follow_up else ""
@@ -460,6 +469,14 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
                               cid=cid, company=company)
                 if coworkers and coworkers[0][0]:
                     changes.append(f"knows {coworkers[0][0]} coworker{'s' if coworkers[0][0] > 1 else ''}")
+
+        if ended_jobs and not new_job:
+            # They left with no new job. First the mark for the undo, then the change.
+            q("MATCH (n:Note {id: $nid}) SET n.ended_only = true")
+            q("MATCH (:Person {id: $pid})-[w:WORKED_AT {current: true}]->(old:Company) WHERE old.id IN $ended"
+              " SET w.current = false, w.ended_on = $day, w.ended_by = $nid", ended=ended)
+            sync_company(g, pid)
+            changes.append("ended: " + ", ".join(n for c, n in now if c in ended))
 
         if event:
             matches = [m for m in find(g, " ".join(event_words(event)) or event, "Event", 5) if same_event(m["name"], event)]
@@ -526,7 +543,7 @@ def parse_met(text):
 
 def shown(key):
     """Bookkeeping fields stay out of what the agent sees."""
-    return key not in ("search", "key", "saving", "saved_at", "job_note", "title_log") and not key.endswith("_note") and not key.startswith(("prev_", "set_"))
+    return key not in ("search", "key", "saving", "saved_at", "job_note", "title_log", "ended_only") and not key.endswith("_note") and not key.startswith(("prev_", "set_"))
 
 
 def plain(v):
@@ -612,6 +629,8 @@ def forget_note(g, nid):
         undo_fields(g, nid, note, pid)
     g.query("MATCH (n:Note {id: $nid}) DETACH DELETE n", params)
     for pid in people:
+        if started or counts["jobs_reopened"] or note.get("ended_only"):
+            sync_company(g, pid, only_with_jobs=not note.get("ended_only"))
         rebuild_from_notes(g, pid, lost_topics)
     # A person from a note goes with their last note, even if a later note linked a coworker to them.
     g.query("MATCH (p:Person {source: 'agent'}) WHERE id(p) IN $ids AND NOT (:Note)-[:ABOUT]->(p)"
@@ -667,6 +686,6 @@ def forget(g, what, id):
 def forget_all_notes(g):
     """Undo every note (the viewer's reset button). Returns how many nodes went."""
     deleted = 0
-    for (nid,) in g.ro_query("MATCH (n:Note) RETURN n.id").result_set:
+    for (nid,) in every_row(g, "MATCH (n:Note) WITH n, id(n) AS at WHERE true", "n.id"):
         deleted += forget_note(g, nid)["nodes"] + 1
     return deleted

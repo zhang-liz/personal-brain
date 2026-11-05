@@ -1,9 +1,17 @@
 """Is this the same company? People say "Kestrel", "Kestrel Inc." and "Kestrel Labs" for one job."""
 
+import unicodedata
+
 LEGAL_WORDS = {"inc", "incorporated", "llc", "ltd", "limited", "corp", "corporation", "co", "company", "gmbh", "plc", "sa", "ag", "bv", "pty"}
 # People drop these words from a name. "Kestrel Capital" is not "Kestrel": a move there must not look like the same job.
 NAME_ENDINGS = {"labs", "lab", "data", "ai", "tech", "technologies", "technology", "software", "systems", "solutions", "group",
                 "holdings", "global", "international", "studio", "studios", "hq", "io", "digital", "cloud", "networks"}
+
+
+def norm(text):
+    """Lowercase words in any script, without punctuation: "Kestrel, Inc." -> "kestrel inc", "三星" -> "三星"."""
+    kept = "".join(c if unicodedata.category(c)[0] in "LMN" else " " for c in (text or "").lower())
+    return " ".join(kept.split())
 
 
 def core(company_id):

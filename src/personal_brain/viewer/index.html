@@ -212,11 +212,16 @@ const [graph, stories] = await Promise.all([
   fetch("graph.json", { cache: "no-store" }).then((r) => r.json()),
   fetch("stories.json", { cache: "no-store" }).then((r) => r.json()).catch(() => []),
 ]);
+// What your agent saved since the export. Read it first, so that the map has room for all of it.
+let liveFailed = false;
+const live = await fetch(`/api/delta?since=${graph.nodes.length}`, { cache: "no-store" })
+  .then((r) => (r.ok ? r.json() : null)).catch(() => { liveFailed = true; return null; });
 document.getElementById("loading").remove();
 
 // ---------- data (typed arrays with spare room for live "remember" additions) ----------
 const N0 = graph.nodes.length, E0 = graph.edges.length;
-const CAP_N = N0 + 500, CAP_E = E0 + 6000;
+const CAP_N = (live ? live.nodes.reduce((top, n) => Math.max(top, n.id + 1), N0) : N0) + 500;
+const CAP_E = E0 + (live ? live.edges.length : 0) + 6000;
 let nN = N0, nE = E0;
 const exists = new Uint8Array(CAP_N), typeOf = new Uint8Array(CAP_N), degree = new Uint32Array(CAP_N);
 const names = new Array(CAP_N).fill(""), subs = new Array(CAP_N).fill(""), whens = new Array(CAP_N).fill("");
@@ -718,7 +723,7 @@ function stepTimelapse(now) {
 // ---------- live "remember" (writes to FalkorDB through the local server) ----------
 const rememberForm = document.getElementById("remember"), rememberText = document.getElementById("rememberText");
 const rememberHint = document.getElementById("rememberHint");
-const FULL_MAP = "New notes are saved, but this map has no room for them. Run personal-brain export, then reload.";
+const FULL_MAP = "Saved. Reload the page to make room on the map.";
 function addGraphData(data) {
   const fresh = [];
   let full = false;
@@ -914,9 +919,8 @@ window.__brain = { renderer, composer, bloom, scene, camera, cur, nodeColor, nod
 // ---------- startup ----------
 if (stories[0]?.source) rememberHint.textContent = `Writes to ${stories[0].source} live`;
 computeBirths(); updateStats(); renderLayers(); applyStyle();
-fetch(`/api/delta?since=${N0}`, { cache: "no-store" })
-  .then((r) => (r.ok ? r.json() : null)).then((d) => { if (d && d.nodes.length) { addGraphData(d); applyStyle(); } })
-  .catch(() => { rememberHint.textContent = "Remember needs the demo server (personal-brain view)"; });
+if (live?.nodes.length) { addGraphData(live); applyStyle(); }
+if (liveFailed) rememberHint.textContent = "Remember needs the demo server (personal-brain view)";
 
 // ---------- live: the galaxy lights up as your agent works ----------
 const LIVE_WORDS = { find: "looked up", about: "searched for", ask: "asked about", remember: "saved" };
