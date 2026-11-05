@@ -34,8 +34,9 @@ def test_built_package():
         check("personal_brain/sample_data/linkedin/Connections.csv" in names, "wheel holds the sample network")
         check(not [n for n in names if "shortlists" in n], "wheel holds no shortlists")
         private = [n for n in names if n.endswith(".env") or n.startswith("data/") or "LinkedInDataExport" in n
-                   or n.endswith("my_brain.json")]
+                   or (n.endswith("my_brain.json") and not n.startswith("personal_brain/sample_data/"))]
         check(not private, "wheel holds no private files")
+        check("personal_brain/sample_data/my_brain.json" in names, "wheel holds the sample's event names")
 
         subprocess.run(["uv", "venv", "--python", sys.executable, str(tmp / "venv")], check=True, capture_output=True)
         subprocess.run(["uv", "pip", "install", "--python", str(tmp / "venv/bin/python"), str(wheel)], check=True, capture_output=True)
@@ -79,6 +80,7 @@ def test_built_package():
             server = Server([brain, "mcp"], user, env)
             found = server.call("find", name="Kestrel Graph", label="Company")["matches"]
             check(found and found[0]["name"] == "Kestrel Graph", "mcp finds the sample network")
+            check(server.call("find", name="Graph & RAG Meetup", label="Event")["found"] == 1, "the sample's events have their names, as in the README")
             saved = server.call("remember", name="Packaged Pat", note="installed from a wheel", new_person=True)
 
             def exists(name):

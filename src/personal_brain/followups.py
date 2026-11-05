@@ -19,7 +19,7 @@ def main():
     if not rows:
         print(f"No open follow-ups on {where}.")
         return
-    print(f"{len(rows)} open follow-ups on {where}. Tell your agent when one is done.")
+    print(f"{len(rows)} open follow-up{'' if len(rows) == 1 else 's'} on {where}. Tell your agent when one is done.")
     for due, fid, person, text in rows:
         print(f"{due or 'no date   '}  {fid}  {printable(person)}: {printable(text)}")
 

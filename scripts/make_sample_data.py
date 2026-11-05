@@ -14,6 +14,7 @@ import unicodedata
 from datetime import date, timedelta
 from pathlib import Path
 
+LAST_MESSAGE = date(2026, 11, 4)
 OUT = Path(__file__).resolve().parent.parent / "src" / "personal_brain" / "sample_data"
 rnd = random.Random(7)
 
@@ -119,7 +120,8 @@ with open(linkedin / "messages.csv", "w", newline="", encoding="utf-8") as f:
     dates = random.Random(11)    # its own generator, so the rest of the sample stays the same
 
     def sent():
-        return f"{dates.randint(2023, 2026)}-{dates.randint(1, 12):02d}-{dates.randint(1, 28):02d} 12:00:00 UTC"
+        day = date(dates.randint(2023, 2026), dates.randint(1, 12), dates.randint(1, 28))
+        return f"{day.replace(year=day.year - 1) if day > LAST_MESSAGE else day} 12:00:00 UTC"    # never after the day the sample was made
 
     w.writerow(["CONVERSATION ID", "SENDER PROFILE URL", "RECIPIENT PROFILE URLS", "DATE"])
     for i, p in enumerate(rnd.sample(people, 60)):

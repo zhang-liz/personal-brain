@@ -489,3 +489,27 @@ def test_tools_say_how_they_behave(tools):
     assert all(t["annotations"]["openWorldHint"] is False and t.get("title") for t in listed.values())
     assert listed["remember"]["annotations"]["idempotentHint"] is True
     assert listed["find"]["annotations"]["readOnlyHint"] is True and listed["ask"]["annotations"]["readOnlyHint"] is True
+
+
+def test_the_sample_has_no_messages_from_the_future():
+    """The agent called a last message after today a data error, on the first question a new user asked."""
+    sample = PROJECT / "src" / "personal_brain" / "sample_data" / "linkedin" / "messages.csv"
+    days = [line.split(",")[-1][:10] for line in sample.read_text(encoding="utf-8").splitlines()[1:]]
+    assert days and max(days) <= "2026-11-04"
+
+
+def test_the_schema_shows_a_my_network_query_that_runs(tools):
+    """Agents wrote EXISTS((:Me)-[:MET]->(p)) for "my network", which FalkorDB cannot run."""
+    example = "MATCH (:Me)-[:CONNECTED|MET]->(p:Person)"
+    assert example in memory.SCHEMA
+    tools.call("remember", name="Jonas Weber", new_person=True)
+    assert tools.call("ask", cypher=example + " RETURN count(DISTINCT p)")["rows"] == [[1]]
+
+
+def test_one_follow_up_is_one(folder):
+    folder.connections(ADA)
+    clean(folder.run("load"))
+    server = Server([*BRAIN, "mcp"], folder.path, folder.env)
+    server.call("remember", name="Ada Lee", follow_up="Send the deck")
+    server.stop()
+    assert "1 open follow-up on" in folder.run("followups").stdout
