@@ -91,7 +91,7 @@ uvx personal-brain forget person "Name"     # a person and every note about them
 uvx personal-brain forget all-notes         # every note and everything they added, to clear a live demo
 ```
 
-Every write hangs off a `Note` node, so you can trace each fact to the note that made it. Running `personal-brain load` again with a new LinkedIn export keeps your notes and what they added. If the new import has the same fact, the import wins, and someone you saved who is now in the import becomes one person. `--force` drops your notes. `PB_GRAPH` picks the graph (default `network`). If FalkorDB is not running, the server still starts, and each tool says how to start it. On Windows, CI checks that it installs and that the server starts. It does not run with a database there, because the runners cannot run FalkorDB.
+Every write hangs off a `Note` node, so you can trace each fact to the note that made it. Running `personal-brain load` again with a new LinkedIn export keeps your notes and what they added. If the new import has the same fact, the import wins, and someone you saved who is now in the import becomes one person. `--force` drops your notes. `load --sample` asks before it replaces a real network, and `--yes` skips the question. `PB_GRAPH` picks the graph (default `network`). If FalkorDB is not running, the server still starts, and each tool says how to start it. On Windows, CI checks that it installs and that the server starts. It does not run with a database there, because the runners cannot run FalkorDB.
 
 Each new LinkedIn export also tells you what changed. `personal-brain load` prints who changed jobs since the last load, and your agent can ask for it later. If your export has message dates, your agent can answer "who did I lose touch with". It reads only the date, not the message. `personal-brain followups` lists what you still have to do.
 
@@ -150,7 +150,7 @@ Two choices:
 - **Connections only**: usually ready in about 10 minutes. You get people, their current company and title, and the day you connected. That is enough for the graph, events and the agent tools.
 - **Download larger data archive**: ready in about a day. It adds your messages (only counts are used), posts, jobs and schools.
 
-Unzip it into `~/.personal-brain` (the folder name contains `LinkedInDataExport`). `personal-brain --help` shows your data folder. To use another folder, set `PB_HOME`.
+Unzip it into `~/.personal-brain` (the folder name contains `LinkedInDataExport`). If there are several, `load` reads the newest. `personal-brain --help` shows your data folder. To use another folder, set `PB_HOME`.
 
 **Or start empty.** Skip the import. The MCP server creates you in an empty graph, and the graph grows as you tell your agent who you met.
 

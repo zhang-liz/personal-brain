@@ -12,9 +12,10 @@ USAGE = f"""personal-brain {__version__}: an MCP server that gives your AI agent
 
 Commands:
   mcp                      run the MCP server for your agent (stdio)
-  load [--sample] [--cloud] [--force]
-                           build the graph from your LinkedIn export, or from the made-up sample.
-                           It keeps your agent's notes. --force drops them
+  load [--sample] [--cloud] [--force] [--yes]
+                           build the graph from your newest LinkedIn export, or from the made-up sample.
+                           It keeps your agent's notes. --force drops them. --sample asks before
+                           it replaces a real network. --yes does not ask
   export [--cloud]         write the viewer's data from the graph
   view                     open the viewer's server on http://127.0.0.1:8765
   notes [--limit <number>] see what your agent saved, newest first

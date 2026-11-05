@@ -13,18 +13,30 @@ from personal_brain.paths import HOME
 BACKUP = HOME / "data" / "notes-backup.json"
 FIELDS = ("title", "location", "email")    # facts a note can correct on a person: the same as memory.FIELDS
 ONE_PER_PAIR = {"INTO", "ATTENDED", "KNOWS"}   # when the import already has this link, the note adds no second one
+PAGE = 5000    # rows per page when the backup reads the graph
+
+
+def every_row(graph, match, columns):
+    """All rows of a query, in pages: a result holds at most 10,000 rows, and the rest would be lost with no error.
+
+    `match` ends with a WHERE that names the place of each row as `at`."""
+    rows, last = [], -1
+    while page := graph.ro_query(f"{match} AND at > $last RETURN {columns}, at ORDER BY at LIMIT {PAGE}", {"last": last}).result_set:
+        rows += [row[:-1] for row in page]
+        last = page[-1][-1]
+    return rows
 
 
 def snapshot(graph):
     """Every note, each node a note made, each link a note made or ended, and the nodes on the other end."""
     return {
-        "nodes": [{"label": l, "props": p} for l, p in graph.ro_query(
-            "MATCH (x) WHERE x:Note OR x.source = 'agent' RETURN labels(x)[0], properties(x)").result_set],
-        "about": [{"note": n, "label": l, "props": p} for n, l, p in graph.ro_query(
-            "MATCH (n:Note)-[:ABOUT]->(x) RETURN n.id, labels(x)[0], properties(x)").result_set],
-        "links": [{"from_label": al, "from": a, "type": t, "to_label": bl, "to": b, "props": r} for al, a, t, bl, b, r in graph.ro_query(
-            "MATCH (a)-[r]->(b) WHERE r.note IS NOT NULL OR r.ended_by IS NOT NULL OR r.title_note IS NOT NULL"
-            " RETURN labels(a)[0], properties(a), type(r), labels(b)[0], properties(b), properties(r)").result_set],
+        "nodes": [{"label": l, "props": p} for l, p in every_row(
+            graph, "MATCH (x) WITH x, id(x) AS at WHERE (x:Note OR x.source = 'agent')", "labels(x)[0], properties(x)")],
+        "about": [{"note": n, "label": l, "props": p} for n, l, p in every_row(
+            graph, "MATCH (n:Note)-[r:ABOUT]->(x) WITH n, x, id(r) AS at WHERE true", "n.id, labels(x)[0], properties(x)")],
+        "links": [{"from_label": al, "from": a, "type": t, "to_label": bl, "to": b, "props": r} for al, a, t, bl, b, r in every_row(
+            graph, "MATCH (a)-[r]->(b) WITH a, r, b, id(r) AS at WHERE (r.note IS NOT NULL OR r.ended_by IS NOT NULL OR r.title_note IS NOT NULL)",
+            "labels(a)[0], properties(a), type(r), labels(b)[0], properties(b), properties(r)")],
     }
 
 
