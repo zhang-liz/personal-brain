@@ -45,6 +45,9 @@ def remember(text):
         return 409, {"error": f"Not sure which person: {who}. Ask your agent, it can pick one."}
     if r["status"] == "needs_jobs":
         return 409, {"error": f"{r['person']['name']} has {len(r['current_jobs'])} current jobs. Ask your agent, it can say which ended."}
+    if r["status"] in ("needs_company", "needs_event"):
+        near = r["current_jobs"][0] if r["status"] == "needs_company" else r["candidates"][0]["name"]
+        return 409, {"error": f"That is one letter off {near}. Use the same spelling, or ask your agent if it is another one."}
     topics = [t for t, rx in TOPIC_RE.items() if rx.search(parts["note"])]
     pnode = q("MATCH (p:Person {id: $pid}) RETURN id(p)", {"pid": r["person"]["id"]}).result_set[0][0]
     return 200, {"parsed": parts, "topics": topics, "person": pnode, "ms": r["ms"], "source": SOURCE,

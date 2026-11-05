@@ -17,7 +17,7 @@ from datetime import date
 
 from falkordb import FalkorDB, Edge, Node, Path as GraphPath
 
-from personal_brain.companies import core, one_edit, same_company, typo
+from personal_brain.companies import core, near_company, one_edit, same_company, typo
 from personal_brain.load_graph import EVENT_ROLE_RE, FORGOTTEN, TOPIC_RE, city_of, create_search_indexes, fold, forgotten_list, norm, without_accents
 
 from personal_brain.notes_backup import every_row, sync_company
@@ -258,9 +258,14 @@ def jobs_that_ended(now, ended_jobs, name):
 
 
 def same_event(a, b):
-    """Same event give or take "and" and "&", case, accents and 1 typo per word of 4+ letters. A year must match exactly."""
+    """Same event give or take "and" and "&", case and accents."""
+    return event_words(a) == event_words(b)
+
+
+def near_event(a, b):
+    """1 letter off per word of 4+ letters. It can be a typo or another event, so only the user can say. A year must match exactly."""
     wa, wb = event_words(a), event_words(b)
-    return len(wa) == len(wb) and all(
+    return wa != wb and len(wa) == len(wb) and all(
         x == y or (min(len(x), len(y)) >= 4 and not any(c.isdigit() for c in x + y) and typo(x, y)) for x, y in zip(wa, wb))
 
 
@@ -358,7 +363,7 @@ def clean_half_saved(g):
 
 
 def remember(g, name, company="", event="", note="", person_id="", new_person=False, on="", ended_jobs=None,
-             title="", location="", email="", follow_up="", due="", follow_up_done=""):
+             title="", location="", email="", follow_up="", due="", follow_up_done="", new_event=False):
     """Save one meeting (who, where they work, where you met, what you talked about, when), or correct a fact about someone."""
     name, company, event, note, title, location, email, follow_up = (
         " ".join((x or "").split()) for x in (name, company, event, note, title, location, email, follow_up))
@@ -411,6 +416,12 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
         said_other_name = bool(same_job) and core(said) != core(cid)
     else:
         new_job = said_other_name = False
+    near = [cname for c, cname in now if near_company(c, said)] if new_job and not known and ended_jobs is None else []
+    if near:
+        return {"status": "needs_company", "person": person, "current_jobs": near,
+                "message": f"{company} is one letter off {near[0]}, a current job of {person['name']}. Ask the user if it is the same company. "
+                           f"If it is, call remember again with company={near[0]}. If it is a new job, call again with ended_jobs: "
+                           "the jobs that ended (an empty list if none ended)."}
     if new_job and ended_jobs is None and len(now) > 1:
         jobs = [cname for _, cname in now]
         return {"status": "needs_jobs", "person": person, "current_jobs": jobs,
@@ -419,6 +430,13 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
     ended = [c for c, _ in now] if ended_jobs is None else jobs_that_ended(now, ended_jobs, person["name"])
     if ended_jobs and not new_job and cid in ended:
         raise ValueError(f"Nothing was saved: {company} is in both company and ended_jobs. Pick one.")
+    matches = find(g, " ".join(event_words(event)) or event, "Event", 5) if event else []
+    same_events = sorted((m for m in matches if same_event(m["name"], event)), key=lambda m: fold(m["name"]) != fold(event))
+    near_events = [m for m in matches if near_event(m["name"], event)]
+    if near_events and not same_events and not new_event:
+        return {"status": "needs_event", "person": person, "candidates": near_events,
+                "message": f"{event} is one letter off {near_events[0]['name']}. Ask the user if it is the same event. If it is, call remember "
+                           f"again with event={near_events[0]['name']}. If it is another event, call again with new_event=true."}
 
     nid = "note-" + uuid.uuid4().hex[:12]
     fid = "followup-" + uuid.uuid4().hex[:12] if follow_up else ""
@@ -479,9 +497,7 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
             changes.append("ended: " + ", ".join(n for c, n in now if c in ended))
 
         if event:
-            matches = [m for m in find(g, " ".join(event_words(event)) or event, "Event", 5) if same_event(m["name"], event)]
-            same = sorted(matches, key=lambda m: fold(m["name"]) != fold(event))
-            eid = same[0]["id"] if same else "note-" + (norm(event) or event).replace(" ", "-")
+            eid = same_events[0]["id"] if same_events else "note-" + (norm(event) or event).replace(" ", "-")
             q("MERGE (e:Event {id: $eid})"
               " ON CREATE SET e.name = $event, e.search = $search, e.date = $day, e.confirmed = true,"
               " e.source = 'agent', e.note = $nid"
@@ -489,7 +505,7 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
               " MERGE (me)-[a:ATTENDED]->(e) ON CREATE SET a.note = $nid"
               " CREATE (p)-[:MET_AT {on: $day, inferred: false, note: $nid}]->(e)",
               eid=eid, event=event, search=fold(event))
-            changes.append(f"met at {same[0]['name'] if same else event}")
+            changes.append(f"met at {same_events[0]['name'] if same_events else event}")
 
         for topic in [t for t, rx in TOPIC_RE.items() if rx.search(note)]:
             q("MATCH (p:Person {id: $pid}), (t:Topic {id: $t}) MERGE (p)-[i:INTO]->(t) ON CREATE SET i.note = $nid", t=topic)

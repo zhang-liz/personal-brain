@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from personal_brain import job_changes, load_graph, memory, notes_backup
-from personal_brain.companies import same_company
+from personal_brain.companies import near_company, same_company
 from personal_brain.load_graph import fold
 
 PROJECT = Path(__file__).resolve().parent.parent
@@ -268,7 +268,7 @@ def test_forgotten_person_from_a_note_stays_out_of_the_import(box):
     ("kestrel data systems", "kestrel", True),
     ("kestrel capital", "kestrel", False),
     ("kestrel motion", "kestrel notion", False),
-    ("kestrel motion", "kestrel mation", True),
+    ("kestrel motion", "kestrel mation", False),
     ("the home inc", "the home depot", False),
     ("a", "a cloud", True),
     ("a", "a cloud guru", False),
@@ -1000,3 +1000,80 @@ def test_job_report_survives_a_rebuild_that_stopped_with_notes(box):
     r = box.load([row("Uma", "Bank", "New Co")])
     assert "Uma Bank: Old Co -> New Co" in r.stdout and box.notes() == ["a note"]
 
+
+# ---------- one letter off inside a word: maybe a typo, maybe another name ----------
+
+def test_one_letter_off_is_not_the_same_company():
+    assert same_company("stratus labs", "status labs") is False
+    assert near_company("stratus labs", "status labs") is True
+    assert near_company("kestrel motion", "kestrel mation") is True
+    assert near_company("kestrel motion", "kestrel notion") is False    # the first letter differs
+    assert near_company("kestrel motion", "kestrel motion") is False    # the same is not near
+
+
+def test_company_one_letter_off_a_job_asks_and_saves_nothing(box):
+    box.load([row("Oda", "Keep", "Kestrel Motion")], (), "--force")
+    r = memory.remember(box.g, "", person_id="oda-keep", company="Kestrel Mation", note="a note")
+    assert r["status"] == "needs_company" and r["current_jobs"] == ["Kestrel Motion"]
+    assert box.notes() == [] and box.current("oda-keep") == ["Kestrel Motion"]
+
+
+def test_company_one_letter_off_said_to_be_the_same(box):
+    box.load([row("Oda", "Keep", "Kestrel Motion")], (), "--force")
+    r = memory.remember(box.g, "", person_id="oda-keep", company="Kestrel Motion", note="a note")
+    assert r["status"] == "saved" and box.current("oda-keep") == ["Kestrel Motion"]
+
+
+def test_company_one_letter_off_said_to_be_a_new_job(box):
+    box.load([row("Oda", "Keep", "Kestrel Motion")], (), "--force")
+    r = memory.remember(box.g, "", person_id="oda-keep", company="Kestrel Mation", note="a note", ended_jobs=["Kestrel Motion"])
+    assert r["status"] == "saved" and box.current("oda-keep") == ["Kestrel Mation"]
+
+
+def test_company_one_letter_off_that_the_graph_knows_is_a_move(box):
+    box.load([row("Oda", "Keep", "Status Labs"), row("Pia", "Other", "Stratus Labs")], (), "--force")
+    r = memory.remember(box.g, "", person_id="oda-keep", company="Stratus Labs", note="moved")
+    assert r["status"] == "saved" and box.current("oda-keep") == ["Stratus Labs"]
+
+
+def test_two_people_with_one_name_are_not_told_apart_by_a_typo(box):
+    box.load([row("Oda", "Keep", "Status Labs"), row("Oda", "Keep", "Tern Works")], (), "--force")
+    r = memory.remember(box.g, "Oda Keep", company="Stratus Labs", note="which one?")
+    assert r["status"] == "needs_choice" and box.notes() == []
+
+
+def test_new_job_report_sees_a_one_letter_move(box):
+    box.load([row("Oda", "Keep", "Status Labs")], (), "--force")
+    r = box.load([row("Oda", "Keep", "Stratus Labs")])
+    assert "Oda Keep: Status Labs -> Stratus Labs" in r.stdout
+
+
+def test_note_person_does_not_merge_on_a_one_letter_company(box):
+    box.load([row("Oda", "Keep", "Status Labs")], (), "--force")
+    memory.remember(box.g, "Oda Keep", company="Stratus Labs", note="someone else", new_person=True)
+    box.load([row("Oda", "Keep", "Status Labs")])
+    assert box.rows("MATCH (p:Person {name: 'Oda Keep'}) RETURN count(p)") == [[2]]
+
+
+def test_event_one_letter_off_asks_and_saves_nothing(box):
+    box.load([row("Oda", "Keep", "Keep Co")], (), "--force")
+    memory.remember(box.g, "", person_id="oda-keep", event="Graph Summit", note="first")
+    r = memory.remember(box.g, "", person_id="oda-keep", event="Graph Summits", note="second")
+    assert r["status"] == "needs_event" and r["candidates"][0]["name"] == "Graph Summit"
+    assert box.notes() == ["first"]
+
+
+def test_event_one_letter_off_said_to_be_new(box):
+    box.load([row("Oda", "Keep", "Keep Co")], (), "--force")
+    memory.remember(box.g, "", person_id="oda-keep", event="Graph Summit", note="first")
+    r = memory.remember(box.g, "", person_id="oda-keep", event="Graph Summits", note="second", new_event=True)
+    assert r["status"] == "saved"
+    assert sorted(box.rows("MATCH (:Person {id: 'oda-keep'})-[:MET_AT]->(e) RETURN e.name")) == [["Graph Summit"], ["Graph Summits"]]
+
+
+def test_event_with_other_spelling_of_the_same_words_is_the_same(box):
+    box.load([row("Oda", "Keep", "Keep Co")], (), "--force")
+    memory.remember(box.g, "", person_id="oda-keep", event="Graphs and Agents", note="first")
+    r = memory.remember(box.g, "", person_id="oda-keep", event="graphs & agents", note="second")
+    assert r["status"] == "saved"
+    assert box.rows("MATCH (:Person {id: 'oda-keep'})-[:MET_AT]->(e) RETURN DISTINCT e.name") == [["Graphs and Agents"]]
