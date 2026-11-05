@@ -14,7 +14,6 @@ A rebuild replaces the graph, and keeps your agent's notes and what they added.
 """
 
 import csv
-import glob
 import itertools
 import json
 import re
