@@ -1,34 +1,27 @@
 # Personal Brain
 
-Turn your LinkedIn network into a graph you can ask questions, stored in
-[FalkorDB](https://www.falkordb.com/), and fly through it in 3D.
+**An MCP server that gives your AI agent memory of your professional network.**
+
+[![PyPI](https://img.shields.io/pypi/v/personal-brain)](https://pypi.org/project/personal-brain/)
+[![Python](https://img.shields.io/pypi/pyversions/personal-brain)](https://pypi.org/project/personal-brain/)
+[![Tests](https://github.com/zhang-liz/personal-brain/actions/workflows/test.yml/badge.svg)](https://github.com/zhang-liz/personal-brain/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/zhang-liz/personal-brain/blob/main/LICENSE)
+
+Personal Brain loads your LinkedIn connections into a graph in [FalkorDB](https://www.falkordb.com/). Claude Code, or any MCP client, can then look up who you know, find who can introduce you to whom, and remember who you met. A 3D viewer shows the graph as a galaxy.
+
+```bash
+claude mcp add personal-brain -- uvx personal-brain mcp
+```
+
+This command needs a database with your network in it. See the [quick start](#quick-start-a-sample-network-in-5-minutes).
 
 [![Personal Brain demo: a galaxy of 19k nodes answering questions](https://raw.githubusercontent.com/zhang-liz/personal-brain/main/docs/demo.gif)](https://zhang-liz.github.io/personal-brain/)
 
-**[Try the live demo](https://zhang-liz.github.io/personal-brain/)**. All connections in it are made up, and its companies and events are only example names. To rebuild it, see `scripts/build_demo.py`.
+**[Try the live demo](https://zhang-liz.github.io/personal-brain/)**. All connections in it are made up, and its companies and events are only example names.
 
-After every event you meet people. Two weeks later you forget who they were,
-what they work on, and who could introduce you to whom. Personal Brain keeps
-that memory as a graph: people, companies, schools, skills, events, topics,
-investors and cities, plus inferred "who knows whom" links.
+After every event you meet people. Two weeks later you forget who they were, what they work on, and who could introduce you to whom. Your agent can now remember that for you. Your agent cannot delete anything: only you can, with `personal-brain forget`.
 
-What the viewer does:
-
-- Shows your whole network as a galaxy in WebGL (tested with 19k nodes and 117k edges), with a 2D / 3D toggle.
-- **Time-lapse**: watch your network grow, connection by connection, with your events popping up.
-- **Ask the graph**: a question types itself, then its Cypher query, then the answer lights up with light pulses along the paths. Example questions:
-  - Which founders did I meet at events this year?
-  - Who in my network works at big tech?
-  - Who can warm-intro me to people at well-funded startups?
-  - Which startups host AI events, and who do I know there?
-  - Who should I invite to my podcast on agents and memory?
-  - Which upcoming agent events can I speak at through people I know?
-- **Remember**: type "Met Maya from Supabase at AI Engineer Summit, runs developer events" and it is written to FalkorDB live and appears in the galaxy.
-- **Live view**: keep `personal-brain view` open while your agent works. Each person it looks up or saves lights up in the galaxy.
-- **Demo mode**: the whole show hands-free (press `D`).
-- **Agent memory (MCP)**: Claude Code, or any MCP client, can find people, ask the graph, and remember who you met. It cannot delete anything: only you can, with `personal-brain forget`.
-
-Everything runs on your laptop. The viewer works offline (three.js is vendored).
+Everything runs on your laptop.
 
 ## Quick start: a sample network in 5 minutes
 
@@ -70,7 +63,7 @@ claude mcp add personal-brain -e FALKORDB_URL="$FALKORDB_URL" -- uvx personal-br
 
 Or put `FALKORDB_URL=...` in `~/.personal-brain/.env`.
 
-## Use it as your agent's memory (MCP)
+## The MCP tools
 
 `uvx personal-brain mcp` gives your agent three tools on one graph:
 
@@ -91,6 +84,23 @@ uvx personal-brain forget all-notes         # every note and everything they add
 Every write hangs off a `Note` node, so you can trace each fact to the note that made it. Running `personal-brain load` again with a new LinkedIn export keeps your notes and what they added. If the new import has the same fact, the import wins, and someone you saved who is now in the import becomes one person. `--force` drops your notes. `PB_GRAPH` picks the graph (default `network`). If FalkorDB is not running, the server still starts, and each tool says how to start it. On Windows, CI checks that it installs and that the server starts. It does not run with a database there, because the runners cannot run FalkorDB.
 
 Each new LinkedIn export also tells you what changed. `personal-brain load` prints who changed jobs since the last load, and your agent can ask for it later. If your export has message dates, your agent can answer "who did I lose touch with". It reads only the date, not the message. `personal-brain followups` lists what you still have to do.
+
+## The 3D viewer
+
+Run `personal-brain export`, then `personal-brain view`, and open http://127.0.0.1:8765. It works offline, because three.js is included.
+
+- Shows your whole network as a galaxy in WebGL (tested with 19k nodes and 117k edges), with a 2D / 3D toggle.
+- **Time-lapse**: watch your network grow, connection by connection, with your events popping up.
+- **Ask the graph**: a question types itself, then its Cypher query, then the answer lights up with light pulses along the paths. Example questions:
+  - Which founders did I meet at events this year?
+  - Who in my network works at big tech?
+  - Who can warm-intro me to people at well-funded startups?
+  - Which startups host AI events, and who do I know there?
+  - Who should I invite to my podcast on agents and memory?
+  - Which upcoming agent events can I speak at through people I know?
+- **Remember**: type "Met Maya from Supabase at AI Engineer Summit, runs developer events" and it is written to FalkorDB live and appears in the galaxy.
+- **Live view**: keep `personal-brain view` open while your agent works. Each person it looks up or saves lights up in the galaxy.
+- **Demo mode**: the whole show hands-free (press `D`).
 
 ## How it works
 
@@ -175,7 +185,7 @@ Then, in another terminal, run the tests. They use throwaway graphs:
 ## Your data stays yours
 
 - Your data stays in `~/.personal-brain`, outside the package. Only you can open that folder. In a clone, the export, `data/`, `.env` and `my_brain.json` are in `.gitignore`. Never commit them.
-- Message text is never read into the graph, only how many messages you exchanged with each person.
+- Message text is never read into the graph, only how many messages you exchanged with each person and the date of the last one.
 - `data/viewer/graph.json` in your data folder holds real names. Share screenshots, not that file.
 - The local server listens on `127.0.0.1` only and serves only `data/viewer/`.
 
@@ -207,6 +217,10 @@ Then, in another terminal, run the tests. They use throwaway graphs:
 | `docs/demo_queries.cypher` | Queries to paste into the FalkorDB Browser |
 
 This is an early project. It has tests and CI, but commands and tools may still change before 1.0.
+
+## Contributing
+
+See [CONTRIBUTING.md](https://github.com/zhang-liz/personal-brain/blob/main/CONTRIBUTING.md). To report a security problem, see [SECURITY.md](https://github.com/zhang-liz/personal-brain/blob/main/SECURITY.md).
 
 ## License
 

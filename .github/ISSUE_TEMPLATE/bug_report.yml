@@ -1,0 +1,32 @@
+name: Bug report
+description: Something does not work.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not paste real names from your network, your `.env` or your database URL.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to make it happen
+      description: The sample network (`personal-brain load --sample`) is the best place to show it.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The output of `personal-brain --version`.
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: MCP client, system and database
+      placeholder: Claude Code, macOS, local FalkorDB
