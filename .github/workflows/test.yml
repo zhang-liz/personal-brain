@@ -3,10 +3,15 @@ name: Test
 # Runs once per pull request, on the oldest Python we support. A new push to a pull request
 # cancels the run before it. Run it by hand before a release to add newer Pythons and Windows:
 #   gh workflow run test.yml
+# A pull request that changes only docs skips the steps, in this same job: `main` requires the
+# check "test (3.10)", and there must be only one check with that name.
 on:
   pull_request:
-    paths-ignore: ["**.md", "docs/**"]
   workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
 
 concurrency:
   group: test-${{ github.ref }}
@@ -24,20 +29,41 @@ jobs:
         ports:
           - 6379:6379
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - name: Find out if only docs changed
+        id: changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          files=""
+          if [ -n "$PR" ]; then
+            files=$(gh pr diff "$PR" --repo "$GITHUB_REPOSITORY" --name-only)
+          fi
+          if [ -n "$files" ] && ! echo "$files" | grep -vE '(\.md$|^docs/)' > /dev/null; then
+            echo "Only docs changed. The code tests do not run."
+          else
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.changes.outputs.code
+        uses: actions/checkout@v7
+      - if: steps.changes.outputs.code
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
-      - run: python -m venv .venv && .venv/bin/pip install -e ".[test]" uv
-      - run: .venv/bin/uvx ruff@0.17.3 check src tests scripts
+      - if: steps.changes.outputs.code
+        run: python -m venv .venv && .venv/bin/pip install -e ".[test]" uv
+      - if: steps.changes.outputs.code
+        run: .venv/bin/uvx ruff@0.17.3 check src tests scripts
       - name: Wait for FalkorDB
+        if: steps.changes.outputs.code
         run: |
           for i in $(seq 1 30); do
             (exec 3<>/dev/tcp/localhost/6379) 2>/dev/null && exit 0
             sleep 1
           done
           exit 1
-      - run: PATH="$PWD/.venv/bin:$PATH" .venv/bin/python -m pytest -x
+      - if: steps.changes.outputs.code
+        run: PATH="$PWD/.venv/bin:$PATH" .venv/bin/python -m pytest -x
 
   windows:
     if: github.event_name == 'workflow_dispatch'
