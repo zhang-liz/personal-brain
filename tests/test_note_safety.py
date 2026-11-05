@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from personal_brain import job_changes, memory, notes_backup
+from personal_brain import job_changes, load_graph, memory, notes_backup
 from personal_brain.companies import same_company
 
 PROJECT = Path(__file__).resolve().parent.parent
@@ -588,3 +588,141 @@ def test_a_save_that_died_and_a_retry_leave_one_current_job(box, writes):
     memory.remember(box.g, "", person_id="kai-back", note="the next save")
     assert box.rows("MATCH (n:Note) WHERE n.saving IS NOT NULL RETURN count(n)") == [[0]]
     assert box.current("kai-back") == ["Nova Graph"]
+
+
+# ---------- a result holds at most 10,000 rows by default ----------
+
+def test_backup_reads_past_the_row_limit(box):
+    box.load([row("Rae", f"Cap{i}", "Cap Works") for i in range(30)], (), "--force")
+    for i in range(6):
+        memory.remember(box.g, f"Nell Hire{i}", new_person=True, company="Cap Works", note=f"hire {i}")
+    whole = notes_backup.snapshot(box.g)
+    assert len(whole["links"]) > 100
+    db = memory.FalkorDB().connection
+    size = db.execute_command("GRAPH.CONFIG", "GET", "RESULTSET_SIZE")[1]
+    db.execute_command("GRAPH.CONFIG", "SET", "RESULTSET_SIZE", 10)
+    try:
+        capped = notes_backup.snapshot(box.g)
+    finally:
+        db.execute_command("GRAPH.CONFIG", "SET", "RESULTSET_SIZE", size)
+    for part in ("nodes", "about", "links"):
+        assert sorted(json.dumps(x, sort_keys=True) for x in capped[part]) == sorted(json.dumps(x, sort_keys=True) for x in whole[part])
+
+
+# ---------- the sample must not take the place of a real network ----------
+
+def run_load(home, *flags, export=None):
+    env = {**os.environ, "PB_HOME": str(home), "FALKORDB_URL": ""}
+    if export:
+        env["LINKEDIN_EXPORT"] = str(export)
+    return subprocess.run([sys.executable, "-m", "personal_brain.load_graph", "--graph", GRAPH, *flags],
+                          capture_output=True, text=True, stdin=subprocess.DEVNULL, env=env)
+
+
+def test_sample_asks_before_it_replaces_a_real_network(box):
+    export = box.home / "real"
+    export.mkdir()
+    (export / "Connections.csv").write_text("First Name,Last Name,URL,Email Address,Company,Position,Connected On\n" + row("Rory", "Real", "Real Co") + "\n", encoding="utf-8")
+    assert run_load(box.home, export=export).returncode == 0
+    box.g = memory.connect(GRAPH)[0]
+
+    refused = run_load(box.home, "--sample")
+    assert refused.returncode != 0 and "rory-real" == box.rows("MATCH (p:Person) RETURN p.id")[0][0]
+    assert "Nothing changed" in refused.stderr and "Traceback" not in refused.stderr
+
+    assert run_load(box.home, "--sample", "--yes").returncode == 0
+    assert box.rows("MATCH (p:Person {id: 'rory-real'}) RETURN count(p)")[0][0] == 0
+    assert run_load(box.home, "--sample").returncode == 0, "a sample can replace a sample with no question"
+
+
+def test_sample_does_not_ask_when_only_notes_are_there(box):
+    box.g = memory.connect(GRAPH)[0]
+    memory.setup(box.g)
+    memory.remember(box.g, "Una Note", new_person=True, note="kept")
+    assert run_load(box.home, "--sample").returncode == 0
+    assert box.notes() == ["kept"]
+
+
+# ---------- the newest export wins ----------
+
+@pytest.mark.parametrize("folders, newest", [
+    (["Complete_LinkedInDataExport_12-01-2024", "Complete_LinkedInDataExport_03-04-2026"], "Complete_LinkedInDataExport_03-04-2026"),
+    (["Complete_LinkedInDataExport_01-02-2025", "Basic_LinkedInDataExport_06-07-2026"], "Basic_LinkedInDataExport_06-07-2026"),
+    (["Basic_LinkedInDataExport_06-07-2026", "Complete_LinkedInDataExport_06-07-2026"], "Complete_LinkedInDataExport_06-07-2026"),
+    (["Basic_LinkedInDataExport_12-31-2025 (1)", "Basic_LinkedInDataExport_01-01-2025"], "Basic_LinkedInDataExport_12-31-2025 (1)"),
+])
+def test_newest_export_wins(tmp_path, monkeypatch, folders, newest):
+    for name in folders:
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "Connections.csv").write_text("x", encoding="utf-8")
+    monkeypatch.setattr(load_graph, "HOME", tmp_path)
+    monkeypatch.delenv("LINKEDIN_EXPORT", raising=False)
+    assert load_graph.find_export().name == newest
+
+
+def test_export_with_no_date_uses_its_file_date(tmp_path, monkeypatch):
+    for name, year in (("Old_LinkedInDataExport", 2020), ("New_LinkedInDataExport", 2025)):
+        (tmp_path / name).mkdir()
+        file = tmp_path / name / "Connections.csv"
+        file.write_text("x", encoding="utf-8")
+        stamp = time.mktime((year, 6, 1, 0, 0, 0, 0, 0, -1))
+        os.utime(file, (stamp, stamp))
+    (tmp_path / "Zzz_LinkedInDataExport_01-01-2019").mkdir()
+    (tmp_path / "Zzz_LinkedInDataExport_01-01-2019" / "Connections.csv").write_text("x", encoding="utf-8")
+    monkeypatch.setattr(load_graph, "HOME", tmp_path)
+    monkeypatch.delenv("LINKEDIN_EXPORT", raising=False)
+    assert load_graph.find_export().name == "New_LinkedInDataExport"
+
+
+# ---------- two notes that differ only in punctuation are two notes ----------
+
+@pytest.mark.parametrize("first, second", [("Loves C++", "Loves C#"), ("+1 to the plan", "-1 to the plan"), ("🙂", "🙁")])
+def test_punctuation_can_change_what_a_note_says(box, first, second):
+    box.load([row("Pat", "Punct", "Punct Co")], (), "--force")
+    one = memory.remember(box.g, "", person_id="pat-punct", note=first)
+    two = memory.remember(box.g, "", person_id="pat-punct", note=second)
+    assert (one["status"], two["status"]) == ("saved", "saved")
+    assert box.notes() == sorted([first, second])
+
+
+@pytest.mark.parametrize("retry", ["talked about graphs", "Talked  about GRAPHS", "talked about graphs.", "tálked about graphs"])
+def test_a_retry_in_other_case_or_spacing_is_a_repeat(box, retry):
+    box.load([row("Rey", "Retry", "Retry Co")], (), "--force")
+    memory.remember(box.g, "", person_id="rey-retry", note="talked about graphs")
+    assert memory.remember(box.g, "", person_id="rey-retry", note=retry)["status"] == "already_saved"
+
+
+# ---------- ended_jobs must not say saved when it ended nothing ----------
+
+@pytest.mark.parametrize("company", ["", "Stay Co"])
+def test_ended_jobs_without_a_new_company_saves_nothing(box, company):
+    box.load([row("Eli", "Ended", "Stay Co")], (), "--force")
+    with pytest.raises(ValueError, match="ended_jobs"):
+        memory.remember(box.g, "", person_id="eli-ended", company=company, ended_jobs=["Stay Co"])
+    assert box.current("eli-ended") == ["Stay Co"]
+    assert box.notes() == []
+
+
+# ---------- forget person writes the keep-out list first ----------
+
+def test_forget_person_stops_before_it_deletes_if_the_list_is_broken(box):
+    box.load([row("Fay", "Forget", "Forget Co")], (), "--force")
+    memory.remember(box.g, "", person_id="fay-forget", note="a note")
+    memory.FORGOTTEN.write_text("{broken", encoding="utf-8")
+    with pytest.raises(SystemExit, match="forgotten.json"):
+        memory.forget_person(box.g, "fay-forget")
+    assert box.person("fay-forget", "name") == ["Fay Forget"]
+    assert box.notes() == ["a note"]
+
+
+def test_forget_person_is_on_the_list_even_if_the_delete_stops(box, monkeypatch):
+    box.load([row("Gil", "Halfway", "Forget Co")], (), "--force")
+    memory.remember(box.g, "", person_id="gil-halfway", note="a note")
+
+    def stops(*_):
+        raise RuntimeError("connection lost")
+
+    monkeypatch.setattr(memory, "forget_note", stops)
+    with pytest.raises(RuntimeError):
+        memory.forget_person(box.g, "gil-halfway")
+    assert "gil-halfway" in json.loads(memory.FORGOTTEN.read_text(encoding="utf-8"))

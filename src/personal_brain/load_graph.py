@@ -44,19 +44,29 @@ GENERIC_COMPANIES = {"self employed", "freelance", "stealth", "stealth startup",
 
 
 
+def forgotten_list(path=FORGOTTEN):
+    """The ids and names on the keep-out list. Stops if it cannot read it: going on could bring someone back, or lose them from the list."""
+    try:
+        return set(json.loads(path.read_text(encoding="utf-8"))) if path.exists() else set()
+    except (ValueError, TypeError) as e:
+        sys.exit(f"Cannot read {path}: {e}. It lists the people you forgot. Fix the file, then try again.")
+
+
 def norm(text):
     """Lowercase words in any script, without punctuation: "Kestrel, Inc." -> "kestrel inc", "三星" -> "三星"."""
     kept = "".join(c if unicodedata.category(c)[0] in "LMN" else " " for c in (text or "").lower())
     return " ".join(kept.split())
 
 
-def fold(text):
-    """Name as lowercase words without accents, for search: "Tomás Ortega" -> "tomas ortega".
+def without_accents(text):
+    """Only Latin accents go. Other scripts stay as they are, because their marks can change the name."""
+    return "".join(unicodedata.normalize("NFKD", c).encode("ascii", "ignore").decode() or c
+                   for c in unicodedata.normalize("NFKC", text or ""))
 
-    Only Latin accents go. Other scripts stay as they are, because their marks can change the name."""
-    plain = (unicodedata.normalize("NFKD", c).encode("ascii", "ignore").decode() or c
-             for c in unicodedata.normalize("NFKC", text or ""))
-    return norm("".join(plain))
+
+def fold(text):
+    """Name as lowercase words without accents, for search: "Tomás Ortega" -> "tomas ortega"."""
+    return norm(without_accents(text))
 
 
 def load_settings():
@@ -129,16 +139,29 @@ def create_search_indexes(graph):
             raise
 
 
+def export_date(folder):
+    """The day in a name like Complete_LinkedInDataExport_03-04-2026, where the month comes first. Else the day of its file."""
+    found = re.search(r"(\d{2})-(\d{2})-(\d{4})", folder.name)
+    if found:
+        first, second, year = map(int, found.groups())
+        for month, day in ((first, second), (second, first)):
+            try:
+                return date(year, month, day)
+            except ValueError:
+                pass
+    return date.fromtimestamp((folder / "Connections.csv").stat().st_mtime)
+
+
 def find_export():
-    """The unzipped LinkedIn data export in your data folder (or $LINKEDIN_EXPORT, or the sample)."""
+    """The newest unzipped LinkedIn data export in your data folder (or $LINKEDIN_EXPORT, or the sample)."""
     if SAMPLE:
         return SAMPLE_DIR / "linkedin"
     if os.environ.get("LINKEDIN_EXPORT"):
         return Path(os.environ["LINKEDIN_EXPORT"])
-    found = sorted(p for p in HOME.glob("*LinkedInDataExport*") if (p / "Connections.csv").exists())
+    found = [p for p in HOME.glob("*LinkedInDataExport*") if (p / "Connections.csv").exists()]
     if not found:
         sys.exit(f"No LinkedIn export found. Unzip it into {HOME}, or try --sample (see README.md).")
-    return found[-1]
+    return max(found, key=lambda p: (export_date(p), p.name))    # on the same day, Complete comes after Basic
 
 
 # Cities: metro level, from profile locations ("Berlin Metropolitan Area" -> Berlin).
@@ -204,7 +227,7 @@ def load_me():
 def load_connections():
     lines = (find_export() / "Connections.csv").read_text(encoding="utf-8").splitlines()
     start = next(i for i, line in enumerate(lines) if line.startswith("First Name,"))
-    forgotten = set(json.loads(FORGOTTEN.read_text(encoding="utf-8"))) if FORGOTTEN.exists() else set()
+    forgotten = forgotten_list()
     people = {}
     for row in csv.DictReader(lines[start:]):
         slug = slug_of(row["URL"])
@@ -389,7 +412,22 @@ def load_upcoming(people, current, countries):
     return rows, hosted
 
 
+def confirm_sample(graph, place):
+    """The sample must not take the place of a real network with no question: it comes back only from a LinkedIn export."""
+    real = graph.ro_query("MATCH (p:Person) WHERE p.source IS NULL RETURN count(p)").result_set[0][0]
+    marked = graph.ro_query("MATCH (m:Me) RETURN m.sample").result_set
+    if not real or (marked and marked[0][0]):
+        return
+    print(f"{place} holds {real} people from a real network. --sample replaces them with the made-up network,\n"
+          "and only your LinkedIn export can bring them back. To keep them, use another graph: PB_GRAPH=sample personal-brain load --sample\n"
+          "Replace them? [y/N] ", end="", flush=True)
+    if sys.stdin.readline().strip().lower() not in ("y", "yes"):
+        sys.exit("Nothing changed.")
+
+
 def main():
+    if not SAMPLE:
+        print(f"Reading {find_export()}")
     people = load_connections()
     profiles = load_enriched()
     msg_counts, groups, last_messages = load_messages()
@@ -592,8 +630,10 @@ def main():
     old_jobs = job_changes.read_jobs(graph) if exists else {}
     kept = None
     place = ("cloud/" if "--cloud" in sys.argv else "local/") + GRAPH
+    if SAMPLE and exists and "--yes" not in sys.argv:
+        confirm_sample(graph, place)
     if "--force" not in sys.argv:
-        forgotten = set(json.loads(FORGOTTEN.read_text(encoding="utf-8"))) if FORGOTTEN.exists() else set()
+        forgotten = forgotten_list()
         kept = notes_backup.choose(notes_backup.pending(), notes_backup.snapshot(graph) if exists else None, place, forgotten)
         if kept and kept["nodes"]:
             notes_backup.save(kept)
@@ -612,7 +652,7 @@ def main():
 
     for label in ["Person", "Company", "School", "Skill", "Topic", "Event", "Investor", "City"]:
         graph.query(f"CREATE INDEX FOR (n:{label}) ON (n.id)")
-    graph.query("CREATE (:Me {id: 'me', name: $name, title: $title, location: $location})", me)
+    graph.query("CREATE (:Me {id: 'me', name: $name, title: $title, location: $location, sample: $sample})", {**me, "sample": SAMPLE or None})
     run("UNWIND $rows AS r CREATE (:Person {id: r.id, name: r.name, search: r.search, url: r.url, headline: r.headline,"
         " about: r.about, location: r.location, title: r.title, company: r.company,"
         " connected_on: r.connected_on, messages: r.messages, last_message: r.last_message, enriched: r.enriched,"

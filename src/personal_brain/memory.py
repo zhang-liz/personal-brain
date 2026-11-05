@@ -18,7 +18,7 @@ from datetime import date
 from falkordb import FalkorDB, Edge, Node, Path as GraphPath
 
 from personal_brain.companies import core, one_edit, same_company, typo
-from personal_brain.load_graph import EVENT_ROLE_RE, FORGOTTEN, TOPIC_RE, city_of, create_search_indexes, fold, norm
+from personal_brain.load_graph import EVENT_ROLE_RE, FORGOTTEN, TOPIC_RE, city_of, create_search_indexes, fold, forgotten_list, norm, without_accents
 
 from personal_brain.paths import env_file_url
 MAX_ROWS = 50        # rows ask() hands back to the agent
@@ -199,9 +199,14 @@ def meeting_date(on):
     return day.isoformat()
 
 
+def as_said(text):
+    """Text for telling a retry from new words: case, accents and spacing go. "C++" and "C#" stay two things."""
+    return " ".join(without_accents(text).lower().split()).rstrip(".!,;: ")
+
+
 def repeat_key(company, event, text, day, fields):
     """Two notes with this key about one person are one meeting saved twice, from an agent's retry."""
-    return hashlib.sha256(json.dumps([fold(company), fold(event), fold(text), day, sorted(fields.items())]).encode()).hexdigest()[:16]
+    return hashlib.sha256(json.dumps([as_said(company), as_said(event), as_said(text), day, sorted(fields.items())]).encode()).hexdigest()[:16]
 
 
 def saved_before(g, key, person, company, event, note):
@@ -396,6 +401,9 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
         said_other_name = bool(same_job) and core(said) != core(cid)
     else:
         new_job = said_other_name = False
+    if ended_jobs and not new_job:
+        raise ValueError("Nothing was saved: ended_jobs only works with a new company in company. "
+                         "If they left with no new job, the job stays current: say so in a note.")
     if new_job and ended_jobs is None and len(now) > 1:
         jobs = [cname for _, cname in now]
         return {"status": "needs_jobs", "person": person, "current_jobs": jobs,
@@ -631,17 +639,20 @@ def forget_person(g, pid):
     if not rows:
         raise ValueError(f"No person with id {pid}. Use find to look it up.")
     notes = [n for (n,) in g.ro_query("MATCH (n:Note)-[:ABOUT]->(:Person {id: $id}) RETURN n.id", {"id": pid}).result_set]
-    for nid in notes:
-        forget_note(g, nid)
-    g.query("MATCH (p:Person {id: $id}) DETACH DELETE p", {"id": pid})
-    forgotten = set(json.loads(FORGOTTEN.read_text(encoding="utf-8"))) if FORGOTTEN.exists() else set()
-    FORGOTTEN.parent.mkdir(parents=True, exist_ok=True)
     # A person from a note has no LinkedIn id yet, so a later import can only know them by name.
     # If the graph has someone else with this name, they are another person: only the id goes on the list.
     namesakes = g.ro_query("MATCH (p:Person {search: $search}) WHERE p.id <> $id RETURN count(p)",
                            {"search": fold(rows[0][0]), "id": pid}).result_set[0][0]
     by_name = {"name:" + fold(rows[0][0])} if pid.startswith("note-") and not namesakes else set()
-    FORGOTTEN.write_text(json.dumps(sorted(forgotten | {pid} | by_name), indent=1), encoding="utf-8")
+    # The list first: if the delete stops here, a rebuild still leaves them out, and running forget again finishes it.
+    forgotten = forgotten_list(FORGOTTEN)
+    FORGOTTEN.parent.mkdir(parents=True, exist_ok=True)
+    temp = FORGOTTEN.with_suffix(".tmp")
+    temp.write_text(json.dumps(sorted(forgotten | {pid} | by_name), indent=1), encoding="utf-8")
+    temp.replace(FORGOTTEN)
+    for nid in notes:
+        forget_note(g, nid)
+    g.query("MATCH (p:Person {id: $id}) DETACH DELETE p", {"id": pid})
     return {"forgot": "person", "name": rows[0][0], "notes": len(notes), "kept_out_of_rebuilds": True}
 
 

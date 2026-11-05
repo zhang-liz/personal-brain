@@ -3,6 +3,12 @@
 ## Unreleased
 
 Fixed:
+- A rebuild keeps all of a note's links. FalkorDB returns at most 10,000 rows by default, so the backup lost the rest, and people could lose their current job, while `load` still said it kept every note.
+- `load --sample` asks before it replaces a real network. `--yes` does not ask.
+- `load` picks the newest LinkedIn export by the date in the folder name. Before, an older export could win. It prints which one it reads.
+- Two notes that differ only in punctuation are two notes. Before, "Loves C#" after "Loves C++" returned `already_saved` and was lost.
+- `ended_jobs` without a new company is an error. Before, it said `saved`, ended nothing and recorded a meeting.
+- `forget person` writes the keep-out list before it deletes, so someone cannot come back after a delete that stopped.
 - A second session no longer deletes a note that another session is saving. Before, about 3 notes in 10 were lost when saves overlapped, and the reply still said "saved".
 - A rebuild that stopped halfway no longer overwrites newer notes, or brings back a forgotten person. A rebuild now stops if the backup belongs to another graph.
 - After a rebuild, `forget` brings back what the new import says, not an old or empty value.

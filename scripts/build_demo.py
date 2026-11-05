@@ -50,7 +50,7 @@ def main():
     SITE.mkdir(parents=True, exist_ok=True)
     env = {"PB_SAMPLE_DIR": str(DATA), "PB_VIEWER_DIR": str(SITE), "PB_GRAPH": "demo"}
     run("scripts/make_demo_data.py", *sys.argv[1:])
-    run("-m", "personal_brain.load_graph", "--sample", "--graph", "demo", **env)
+    run("-m", "personal_brain.load_graph", "--sample", "--yes", "--graph", "demo", **env)
     run("-m", "personal_brain.export_graph", **env)
     run("-m", "personal_brain.layout_graph", **env)
     shutil.copyfile(SITE / "graph.json", DATA / "graph_raw.json")
