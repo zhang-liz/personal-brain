@@ -38,11 +38,15 @@ def typo(a, b):
 
 
 def same_company(a, b):
-    """Two normalized names: equal, the same but for common last words, or one typo in a long name. "apple" and "apply" stay two."""
+    """Two normalized names: equal, or the same but for common last words. "status labs" and "stratus labs" stay two."""
     a, b = core(a), core(b)
     short, long = sorted((a, b), key=len)
-    if a == b or (long.startswith(short + " ") and set(long[len(short) + 1:].split()) <= NAME_ENDINGS):
-        return True
+    return a == b or (long.startswith(short + " ") and set(long[len(short) + 1:].split()) <= NAME_ENDINGS)
+
+
+def near_company(a, b):
+    """One letter off in a long name. It can be a typo or another company, so only the user can say."""
+    a, b = core(a), core(b)
     wa, wb = a.split(), b.split()
-    return (len(a) >= 8 and len(wa) == len(wb)
+    return (a != b and len(a) >= 8 and len(wa) == len(wb)
             and all(x == y or (min(len(x), len(y)) >= 5 and typo(x, y)) for x, y in zip(wa, wb)))

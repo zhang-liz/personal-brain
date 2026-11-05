@@ -526,11 +526,13 @@ def run_company_names(g):
     g.query("MERGE (c:Company {id: 'lanternfish data'}) ON CREATE SET c.name = 'Lanternfish Data', c.search = 'lanternfish data'"
             " CREATE (:Person {id: 'lf', name: 'Lena Fisher', search: 'lena fisher', company: 'Lanternfish Data', headline: 'x'})"
             "-[:WORKED_AT {current: true}]->(c)")
-    for said in ["Lanternfish Data Inc.", "Lanternfish", "lanternfish data", "Lanternfsh Data", "LANTERNFISH DATA LLC"]:
+    for said in ["Lanternfish Data Inc.", "Lanternfish", "lanternfish data", "LANTERNFISH DATA LLC"]:
         r = memory.remember(g, "", person_id="lf", company=said, note=f"said {said}")
         check(r["status"] == "saved" and jobs("lf") == [["Lanternfish Data", True]] and not any("now" in c for c in r["changes"]),
               f"{said}: the same job, with no job change")
     check(companies("lanternfish") == 1, "no second company")
+    r = memory.remember(g, "", person_id="lf", company="Lanternfsh Data", note="one letter off")
+    check(r["status"] == "needs_company" and r["current_jobs"] == ["Lanternfish Data"], "one letter off a job: it asks, and does not guess")
     r = memory.remember(g, "Lena Fisher", company="Lanternfish Data Inc.", note="by name")
     check(r["status"] == "saved" and r["person"]["id"] == "lf", "by name with another spelling: the same person, no question")
     r = memory.remember(g, "Fresh Fran", company="Lanternfish Data, Inc.", note="new person", new_person=True)
@@ -554,9 +556,11 @@ def run_event_names(g):
         return next(c for c in r["changes"] if c.startswith("met at"))
 
     memory.remember(g, "Event Eve", new_person=True)
-    for i, said in enumerate(["Graph and RAG Meetup", "Graph RAG Meetup", "graph & rag meetup", "Graph & RAG Meetp"]):
+    for i, said in enumerate(["Graph and RAG Meetup", "Graph RAG Meetup", "graph & rag meetup"]):
         check(event_of(said, f"note {i}") == "met at Graph & RAG Meetup", f"{said}: the same event")
-    check(g.ro_query("MATCH (e:Event) WHERE e.name IN ['Graph and RAG Meetup', 'Graph & RAG Meetp'] RETURN count(e)").result_set[0][0] == 0, "no second event")
+    check(g.ro_query("MATCH (e:Event) WHERE e.name = 'Graph and RAG Meetup' RETURN count(e)").result_set[0][0] == 0, "no second event")
+    r = memory.remember(g, "Event Eve", event="Graph & RAG Meetp", note="one letter off")
+    check(r["status"] == "needs_event" and r["candidates"][0]["name"] == "Graph & RAG Meetup", "one letter off an event: it asks, and does not guess")
     check(event_of("AI Summit 2026", "next year") == "met at AI Summit 2026", "another year is another event")
     check(event_of("Rooftop Party", "new") == "met at Rooftop Party", "another name is another event")
 
