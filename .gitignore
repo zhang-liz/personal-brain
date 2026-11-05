@@ -3,6 +3,7 @@
 data/
 .env
 my_brain.json
+!src/personal_brain/sample_data/my_brain.json
 *.zip
 
 # Not part of the code

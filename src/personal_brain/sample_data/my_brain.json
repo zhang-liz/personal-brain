@@ -1,0 +1,10 @@
+{
+ "events": {
+  "2026-03-12": "Agent Builders Night",
+  "2026-05-21": "Graph & RAG Meetup",
+  "2026-07-09": "AI Engineer Summit",
+  "2026-09-17": "Memory for Agents Workshop",
+  "2026-10-08": "Tech Week: Agent Memory Night"
+ },
+ "skip_companies": []
+}

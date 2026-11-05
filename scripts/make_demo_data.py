@@ -365,7 +365,8 @@ def build(args):
         dates = random.Random(11)    # its own generator, so the rest of the demo stays the same
 
         def sent():
-            return f"{dates.randint(2023, 2026)}-{dates.randint(1, 12):02d}-{dates.randint(1, 28):02d} 12:00:00 UTC"
+            day = date(dates.randint(2023, 2026), dates.randint(1, 12), dates.randint(1, 28))
+            return f"{day.replace(year=day.year - 1) if day > TODAY else day} 12:00:00 UTC"    # never after TODAY
 
         w.writerow(["CONVERSATION ID", "SENDER PROFILE URL", "RECIPIENT PROFILE URLS", "DATE"])
         for i, p in enumerate(rnd.sample(people, len(people) // 6)):

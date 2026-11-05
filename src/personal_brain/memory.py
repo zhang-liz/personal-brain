@@ -49,7 +49,7 @@ For "who changed jobs": noticed_on is the day a new LinkedIn export first showed
 (Company)-[:FUNDED_BY {lead, round}]->(Investor)
 (Event {upcoming: true})-[:HOSTED_BY {via}]->(Person or Company), (Event)-[:ABOUT]->(Topic), (Event)-[:HELD_IN]->(City)
 (Me)-[:WROTE]->(Note {text, on})-[:ABOUT]->(Person), (Me)-[:MET {on, note}]->(Person)
-People you met may be MET but not CONNECTED: for "my network", match both.
+People you met may be MET but not CONNECTED: for "my network", match both: MATCH (:Me)-[:CONNECTED|MET]->(p:Person).
 (FollowUp {text, open, on, due, done_on})-[:FOR]->(Person)   things the user said they would do. open is false when done.
 Topics: AI Agents, Agent Memory, Knowledge Graphs, RAG & Search, LLMs & GenAI, Developer Relations,
 Community & Events, Partnerships, Investing, Founder, Podcast & Media."""
