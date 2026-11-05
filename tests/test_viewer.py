@@ -11,9 +11,9 @@ import urllib.request
 
 import pytest
 
-sync_api = pytest.importorskip("playwright.sync_api")
-
 from personal_brain import activity, memory
+
+sync_api = pytest.importorskip("playwright.sync_api")
 
 GRAPH = "pb_viewer_test"
 BRAIN = [sys.executable, "-m", "personal_brain.cli"]
