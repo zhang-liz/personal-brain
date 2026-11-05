@@ -1,12 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.3.3 (2026-11-05)
 
 Security:
 - `ask` refuses `LOAD CSV`. FalkorDB allows it in a read-only query, so a query could send anything in your graph to any `https://` server, and a hidden instruction in a headline could ask an agent to do that.
 
 Fixed:
-- `load` and every tool work on FalkorDB 6, the image `falkordb/falkordb:latest` moved to on 2026-11-05. Before, `load` stopped with `Received 2 arguments to procedure 'db.idx.fulltext.createNodeIndex'`.
+- `load` and every tool work on FalkorDB 6, which `falkordb/falkordb:latest` now points to. Before, `load` stopped with `Received 2 arguments to procedure 'db.idx.fulltext.createNodeIndex'`.
 - `find` shows the right company and follow-ups on FalkorDB 6.
 - The start commands now name `falkordb/falkordb:v4.22.2`, because FalkorDB 6 can return wrong or empty rows for some queries that an agent may write in `ask`.
 - A tool's error is marked with `isError`, as the MCP spec asks. Before, a client saw every error as a success.
@@ -17,6 +17,10 @@ Fixed:
 - A misspelled field is refused. Before, `notes` for `note` lost the note, and `remember` still said `saved`.
 - A slow query over a URL says it was slow. Before, it said FalkorDB could not be reached, and told the user to start it.
 - A silent local database no longer holds a tool forever.
+- The sample's event names are in the package. Before, the README example made a second copy of an event.
+- No sample message has a date in the future.
+- The `ask` schema shows a "my network" query that works: `MATCH (:Me)-[:CONNECTED|MET]->(p:Person)`.
+- `followups` says "1 open follow-up", not "1 open follow-ups".
 
 Changed:
 - `find` by name always returns an object: `found`, `matches`, and `more` and `message` when they apply. Before, it returned a list, or an object when nothing matched.
