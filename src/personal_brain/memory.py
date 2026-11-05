@@ -13,14 +13,13 @@ import os
 import re
 import uuid
 from datetime import date
-from pathlib import Path
 
 from falkordb import FalkorDB, Edge, Node, Path as GraphPath
 
 from personal_brain.companies import core, one_edit, same_company
 from personal_brain.load_graph import EVENT_ROLE_RE, FORGOTTEN, TOPIC_RE, city_of, create_search_indexes, fold, norm
 
-from personal_brain.paths import HOME, env_file_url
+from personal_brain.paths import env_file_url
 MAX_ROWS = 50        # rows ask() hands back to the agent
 TIMEOUT_MS = 5000    # longest an ask() query may run
 

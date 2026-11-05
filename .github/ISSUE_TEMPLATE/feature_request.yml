@@ -1,0 +1,15 @@
+name: Feature idea
+description: Something your agent should remember or answer.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What do you want your agent to do?
+      description: A real sentence you would say to your agent helps most.
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: What happens today?
