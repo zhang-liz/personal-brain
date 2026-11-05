@@ -13,7 +13,7 @@ from pathlib import Path
 from test_mcp_server import Server, check
 
 
-def main():
+def test_without_a_database():
     home = Path(tempfile.mkdtemp())
     env = {**os.environ, "PB_HOME": str(home), "FALKORDB_URL": "redis://localhost:6399"}
     brain = [sys.executable, "-m", "personal_brain.cli"]
@@ -41,4 +41,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    test_without_a_database()
