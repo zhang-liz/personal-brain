@@ -371,3 +371,111 @@ def test_activity_says_when_the_viewer_files_change(folder, viewer):
     assert read() == before
     clean(folder.run("export"))
     assert read() != before
+
+
+# ---------- what the tools say back ----------
+
+@pytest.fixture
+def tools(folder):
+    server = Server([*BRAIN, "mcp"], folder.path, folder.env)
+    yield server
+    server.stop()
+
+
+def raw(server, tool, **arguments):
+    return server.request("tools/call", {"name": tool, "arguments": arguments})["result"]
+
+
+@pytest.mark.parametrize("cypher", [
+    "LOAD CSV FROM 'https://127.0.0.1:1/x.csv' AS row RETURN row",
+    "load   csv from 'https://127.0.0.1:1/x.csv' AS row RETURN row",
+    "LOAD /* x */ CSV FROM 'https://127.0.0.1:1/x.csv' AS row RETURN row",
+    "LOAD\nCSV FROM $url AS row RETURN row",
+    "MATCH (p:Person) WITH p LOAD CSV FROM 'https://127.0.0.1:1/?' + p.name AS row RETURN row",
+])
+def test_ask_cannot_send_data_out(tools, cypher):
+    """LOAD CSV works in a read-only query, and its URL can hold anything from the graph."""
+    assert "internet" in tools.call("ask", cypher=cypher, params={"url": "https://127.0.0.1:1/x.csv"})["error"]
+
+
+def test_an_error_is_marked_as_an_error(tools):
+    assert raw(tools, "find")["isError"] is True
+    assert raw(tools, "ask", cypher="MATCH (p:Person RETURN p")["isError"] is True
+    assert not raw(tools, "find", name="Nobody").get("isError")
+
+
+def test_the_viewer_still_lights_up_what_find_shows(tools, folder):
+    tools.call("remember", name="Jonas Weber", new_person=True)
+    tools.call("find", name="Jonas Weber", label="Person")
+    last = json.loads((folder.path / "data" / "activity.json").read_text(encoding="utf-8"))["events"][-1]
+    assert last["tool"] == "find" and last["names"] == ["Jonas Weber"]
+
+
+def test_a_reply_is_one_compact_block(tools):
+    tools.call("remember", name="Jonas Weber", new_person=True)
+    tools.call("remember", name="Jonas Fischer", new_person=True)
+    content = raw(tools, "find", name="Jonas")["content"]
+    assert len(content) == 1 and "\n" not in content[0]["text"] and json.loads(content[0]["text"])["found"] == 2
+
+
+def test_find_says_when_it_shows_only_some(tools):
+    for number in range(12):
+        tools.call("remember", name=f"Jonas Number{number}", new_person=True)
+    some = tools.call("find", name="Jonas", label="Person")
+    assert len(some["matches"]) == 10 and some["more"] is True
+    assert "more" not in tools.call("find", name="Jonas Number7", label="Person")
+
+
+def test_ask_gives_no_wrong_total_when_it_cuts_rows(tools):
+    tools.call("remember", name="Jonas Weber", new_person=True)
+    whole = tools.call("ask", cypher="UNWIND range(1, 3) AS x RETURN x")
+    assert whole["row_count"] == 3 and whole["truncated"] is False
+    cut = tools.call("ask", cypher="UNWIND range(1, 20000) AS x RETURN x")
+    assert len(cut["rows"]) == 50 and cut["truncated"] is True
+    assert "row_count" not in cut and "count()" in cut["message"]
+
+
+def test_ask_keeps_a_reply_small_enough_to_read(tools):
+    tools.call("remember", name="Jonas Weber", new_person=True)
+    many = raw(tools, "ask", cypher="UNWIND range(1, 50) AS x RETURN x, $big", params={"big": "x" * 5000})
+    assert 5000 < len(many["content"][0]["text"]) <= 45000
+    assert json.loads(many["content"][0]["text"])["truncated"] is True
+    one = tools.call("ask", cypher="RETURN $big", params={"big": "x" * 100000})
+    assert one["rows"] == [] and one["truncated"] is True and "fewer fields" in one["message"]
+
+
+def test_find_about_keeps_a_long_note_short(tools):
+    tools.call("remember", name="Jonas Weber", new_person=True, note="pipes " * 5000)
+    reply = tools.call("find", about="pipes")
+    assert reply["people"][0]["name"] == "Jonas Weber" and len(reply["people"][0]["why"][0]["text"]) <= 300
+
+
+def test_a_slow_query_over_a_url_is_not_a_dead_database(folder):
+    server = Server([*BRAIN, "mcp"], folder.path, {**folder.env, "FALKORDB_URL": "redis://localhost:6379"})
+    server.call("remember", name="Jonas Weber", new_person=True)
+    error = server.call("ask", cypher="UNWIND range(1, 100000) AS a UNWIND range(1, 100000) AS b WITH a, b WHERE a + b < 0 RETURN count(a)")["error"]
+    server.stop()
+    assert "LIMIT" in error and "Cannot reach" not in error
+
+
+def test_a_silent_database_cannot_hold_a_tool_forever():
+    assert memory.connect(GRAPH)[0].client.connection.connection_pool.connection_kwargs["socket_timeout"]
+
+
+def test_a_misspelled_field_saves_nothing(tools):
+    reply = raw(tools, "remember", name="Jonas Weber", new_person=True, notes="This note would be lost")
+    assert reply["isError"] is True and "notes" in reply["content"][0]["text"]
+    assert tools.call("find", name="Jonas Weber")["found"] == 0
+
+
+def test_remember_needs_no_name_to_close_a_follow_up(tools):
+    saved = tools.call("remember", name="Jonas Weber", new_person=True, follow_up="Send the deck")
+    assert tools.call("remember", follow_up_done=saved["follow_up_id"])["status"] == "saved"
+    assert "error" in tools.call("remember")
+
+
+def test_tools_say_how_they_behave(tools):
+    listed = {t["name"]: t for t in tools.request("tools/list")["result"]["tools"]}
+    assert all(t["annotations"]["openWorldHint"] is False and t.get("title") for t in listed.values())
+    assert listed["remember"]["annotations"]["idempotentHint"] is True
+    assert listed["find"]["annotations"]["readOnlyHint"] is True and listed["ask"]["annotations"]["readOnlyHint"] is True

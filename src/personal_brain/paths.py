@@ -11,6 +11,7 @@ from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parent
 CLONE = PACKAGE.parent.parent
+SOCKET_TIMEOUT_S = 30    # longer than any query's own limit, so that a slow query does not look like a dead database
 START_DATABASE = ("`docker run -p 6379:6379 -p 3000:3000 -v falkordb_data:/var/lib/falkordb/data -it --rm falkordb/falkordb:latest`, "
                   "or put your FalkorDB Cloud URL in FALKORDB_URL in the .env file")
 
@@ -35,7 +36,7 @@ def graph_missing(error):
 def open_url(url):
     from falkordb import FalkorDB
     try:
-        return FalkorDB.from_url(url)
+        return FalkorDB.from_url(url, socket_timeout=SOCKET_TIMEOUT_S)
     except ValueError:
         raise BadUrl("FALKORDB_URL is not a database URL. It must start with redis://, rediss://, falkor:// or falkors://. "
                      "Check the environment and the .env file.") from None

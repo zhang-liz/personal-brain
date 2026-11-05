@@ -18,7 +18,7 @@ def names_in(tool, result):
     elif tool == "about":
         found = result.get("people", [])
     elif tool == "find":
-        found = result
+        found = result.get("matches", [])
     else:
         columns = result.get("columns", [])
         found = [v if isinstance(v, dict) else {"name": v}

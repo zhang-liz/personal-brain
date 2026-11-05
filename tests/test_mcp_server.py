@@ -89,7 +89,7 @@ def test_local_database():
     try:
         saved = server.call("remember", name="Stdio Sam", company="Pipe Works", note="met over stdio")
         check(saved.get("status") == "saved", "remember over stdio")
-        found = server.call("find", name="Stdio Sam", label="Person")
+        found = server.call("find", name="Stdio Sam", label="Person")["matches"]
         check(found[0]["id"] == saved["person"]["id"], "find over stdio")
         rows = server.call("ask", cypher="MATCH (p:Person {name: $n}) RETURN p.company", params={"n": "Stdio Sam"})["rows"]
         check(rows == [["Pipe Works"]], "ask over stdio")
@@ -107,7 +107,7 @@ def test_local_database():
         closed = server.call("remember", name="", follow_up_done=todo["follow_up_id"])
         check(closed["status"] == "saved", "remember closes a follow-up over stdio")
         fact = server.call("remember", name="", person_id=saved["person"]["id"], title="Head of Pipes", location="Berlin", email="sam@example.com")
-        found = server.call("find", name="Stdio Sam", label="Person")[0]
+        found = server.call("find", name="Stdio Sam", label="Person")["matches"][0]
         check(fact["status"] == "saved" and found["title"] == "Head of Pipes" and found["email"] == "sam@example.com", "remember takes title, location and email over stdio")
         about = server.call("find", about="stdio")
         check(about["people"][0]["name"] == "Stdio Sam", "find about words over stdio")
