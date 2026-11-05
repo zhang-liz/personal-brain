@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+Changed:
+- The start commands name `falkordb/falkordb:6.0.4`. Tests run on FalkorDB 6.0.4 and 4.22.2.
+- The `ask` schema warns about a FalkorDB 6 bug and shows a way around it: after a `WITH` that uses `collect()` or `count()`, a later filtered `OPTIONAL MATCH` finds nothing.
+
 ## 0.3.3 (2026-11-05)
 
 Security:

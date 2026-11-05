@@ -23,11 +23,6 @@ jobs:
     strategy:
       matrix:
         python: ${{ github.event_name == 'pull_request' && fromJSON('["3.10"]') || fromJSON('["3.10", "3.12", "3.15"]') }}
-    services:
-      falkordb:
-        image: falkordb/falkordb:latest
-        ports:
-          - 6379:6379
     steps:
       - name: Find out if only docs changed
         id: changes
@@ -54,13 +49,15 @@ jobs:
         run: python -m venv .venv && .venv/bin/pip install -e ".[test]" uv
       - if: steps.changes.outputs.code
         run: .venv/bin/uvx ruff@0.17.3 check src tests scripts
-      - name: Wait for FalkorDB
+      # The README names the first version. Users may still run the older one.
+      - name: Test on FalkorDB 6.0.4 and 4.22.2
         if: steps.changes.outputs.code
         run: |
-          for i in $(seq 1 30); do
-            (exec 3<>/dev/tcp/localhost/6379) 2>/dev/null && exit 0
-            sleep 1
+          for image in falkordb/falkordb:6.0.4 falkordb/falkordb:v4.22.2; do
+            echo "::group::$image"
+            docker run -d --name db -p 6379:6379 "$image"
+            for i in $(seq 1 30); do (exec 3<>/dev/tcp/localhost/6379) 2>/dev/null && break; sleep 1; done
+            PATH="$PWD/.venv/bin:$PATH" .venv/bin/python -m pytest -x
+            docker rm -f db
+            echo "::endgroup::"
           done
-          exit 1
-      - if: steps.changes.outputs.code
-        run: PATH="$PWD/.venv/bin:$PATH" .venv/bin/python -m pytest -x

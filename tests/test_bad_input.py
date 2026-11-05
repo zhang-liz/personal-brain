@@ -513,3 +513,13 @@ def test_one_follow_up_is_one(folder):
     server.call("remember", name="Ada Lee", follow_up="Send the deck")
     server.stop()
     assert "1 open follow-up on" in folder.run("followups").stdout
+
+
+def test_the_schema_shows_how_to_get_past_the_falkordb_6_collect_bug(tools):
+    """FalkorDB 6 finds nothing for a filtered OPTIONAL MATCH after a WITH that collects. The schema shows a way around."""
+    way_around = "CALL { WITH p OPTIONAL MATCH (f:FollowUp {open: true})-[:FOR]->(p) RETURN collect(f.text) AS todo }"
+    assert way_around in memory.SCHEMA
+    pid = tools.call("remember", name="Jonas Weber", company="Kestrel", follow_up="Send the deck", new_person=True)["person"]["id"]
+    rows = tools.call("ask", cypher="MATCH (p:Person {id: $id}) OPTIONAL MATCH (p)-[:WORKED_AT {current: true}]->(c:Company) "
+                      "WITH p, collect(c.name) AS jobs " + way_around + " RETURN jobs, todo", params={"id": pid})["rows"]
+    assert rows == [[["Kestrel"], ["Send the deck"]]]

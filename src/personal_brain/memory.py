@@ -52,7 +52,10 @@ For "who changed jobs": noticed_on is the day a new LinkedIn export first showed
 People you met may be MET but not CONNECTED: for "my network", match both: MATCH (:Me)-[:CONNECTED|MET]->(p:Person).
 (FollowUp {text, open, on, due, done_on})-[:FOR]->(Person)   things the user said they would do. open is false when done.
 Topics: AI Agents, Agent Memory, Knowledge Graphs, RAG & Search, LLMs & GenAI, Developer Relations,
-Community & Events, Partnerships, Investing, Founder, Podcast & Media."""
+Community & Events, Partnerships, Investing, Founder, Podcast & Media.
+FalkorDB 6 bug: after a WITH that uses collect() or count(), a later OPTIONAL MATCH or pattern comprehension that filters
+a new node, with {key: value} or WHERE, finds nothing. Do that part before the WITH, or put it in a subquery:
+CALL { WITH p OPTIONAL MATCH (f:FollowUp {open: true})-[:FOR]->(p) RETURN collect(f.text) AS todo }"""
 
 
 def connect(graph=None):
@@ -87,8 +90,7 @@ def search_query(text):
 
 
 # What to show next to each match, so the agent (and you) can tell two Jonases apart.
-# Small separate queries on purpose. FalkorDB 6 returns wrong rows, or none, when one query goes on from a search result,
-# has a second OPTIONAL MATCH after a collect, or has a pattern comprehension with an edge property.
+# Small separate queries on purpose: FalkorDB 6 finds nothing for a filtered OPTIONAL MATCH after a WITH that collects.
 FIND = {
     "Person": "RETURN node.id, {headline: node.headline, connected_on: node.connected_on, title: node.title,"
               " location: node.location, email: node.email, last_message: node.last_message}",
