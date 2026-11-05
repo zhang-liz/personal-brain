@@ -3,6 +3,7 @@
 Each test builds its own throwaway graph from the sample network.
 """
 
+import hashlib
 import itertools
 import json
 import os
@@ -18,6 +19,7 @@ import pytest
 
 from personal_brain import job_changes, load_graph, memory, notes_backup
 from personal_brain.companies import same_company
+from personal_brain.load_graph import fold
 
 PROJECT = Path(__file__).resolve().parent.parent
 GRAPH = "pb_note_safety_test"
@@ -853,3 +855,148 @@ def test_company_follows_the_job_after_several_forgets(box, order):
     for i in order:
         memory.forget_note(box.g, notes[i])
     assert box.current("cal-company") == ["Old Co"] and company_of(box, "cal-company") == "Old Co"
+
+
+# ---------- a backup left by 0.3.1 says nothing about whether the graph went ----------
+
+def old_backup(box):
+    notes_backup.save(notes_backup.snapshot(box.g))
+
+
+def test_old_backup_with_a_whole_graph_keeps_a_forgotten_note_out(box):
+    connections = [row("Oda", "Keep", "Keep Co")]
+    box.load(connections, (), "--force")
+    memory.remember(box.g, "", person_id="oda-keep", note="stays", company="Keep Co")
+    gone = memory.remember(box.g, "", person_id="oda-keep", note="private thing")
+    old_backup(box)
+    memory.forget_note(box.g, gone["note_id"])
+    box.load(connections)
+    assert box.notes() == ["stays"]
+
+
+def test_old_backup_with_a_whole_graph_keeps_a_done_follow_up_done(box):
+    connections = [row("Oda", "Keep", "Keep Co")]
+    box.load(connections, (), "--force")
+    fid = memory.remember(box.g, "", person_id="oda-keep", follow_up="send the deck")["follow_up_id"]
+    old_backup(box)
+    memory.remember(box.g, "", follow_up_done=fid)
+    box.load(connections)
+    assert box.rows("MATCH (f:FollowUp) RETURN f.open") == [[False]]
+
+
+def test_half_built_graph_keeps_a_follow_up_done_since_the_backup(box):
+    connections = [row("Oda", "Keep", "Keep Co")]
+    box.load(connections, (), "--force")
+    fid = memory.remember(box.g, "", person_id="oda-keep", follow_up="send the deck")["follow_up_id"]
+    notes_backup.save({**notes_backup.snapshot(box.g), "graph_deleted": True, "place": PLACE})
+    memory.remember(box.g, "", follow_up_done=fid)
+    box.load(connections)
+    assert box.rows("MATCH (f:FollowUp) RETURN f.open") == [[False]]
+
+
+def test_old_backup_from_a_restore_that_stopped_brings_back_every_note(box):
+    connections = [row("Oda", "Keep", "Keep Co")]
+    box.load(connections, (), "--force")
+    memory.remember(box.g, "", person_id="oda-keep", note="first")
+    second = memory.remember(box.g, "", person_id="oda-keep", note="second")
+    old_backup(box)
+    # As the restore left it: the first note is back with no links yet, and the second is not back yet.
+    box.g.query("MATCH (n:Note {id: $id}) DETACH DELETE n", {"id": second["note_id"]})
+    box.g.query("MATCH (n:Note)-[r:ABOUT]->() DELETE r")
+    box.load(connections)
+    assert box.notes() == ["first", "second"]
+    assert box.rows("MATCH (:Note)-[r:ABOUT]->(:Person {id: 'oda-keep'}) RETURN count(r)") == [[2]]
+
+
+def test_old_backup_with_none_of_its_notes_left_keeps_them_and_says_so(box):
+    connections = [row("Oda", "Keep", "Keep Co")]
+    box.load(connections, (), "--force")
+    only = memory.remember(box.g, "", person_id="oda-keep", note="only note")
+    old_backup(box)
+    memory.forget_note(box.g, only["note_id"])
+    r = box.load(connections)
+    assert box.notes() == ["only note"]    # the graph may be half-built: never lose a note on a guess
+    assert "forget" in r.stdout
+
+
+# ---------- a job named in two notes from 0.3.1 ----------
+
+def as_031(box, nid, company="", event=""):
+    """The note as 0.3.1 wrote it: no job_note and no saved_at, and a key with the words it was given."""
+    text, day = box.rows("MATCH (n:Note {id: $id}) RETURN n.text, n.on", id=nid)[0]
+    fold_key(box, nid, company, event, text, day, {})
+
+
+def fold_key(box, nid, company, event, text, day, fields):
+    key = hashlib.sha256(json.dumps([fold(company), fold(event), fold(text), day, sorted(fields.items())]).encode()).hexdigest()[:16]
+    box.g.query("MATCH (n:Note {id: $id}) SET n.key = $key, n.saved_at = NULL, n.job_note = NULL", {"id": nid, "key": key})
+
+
+def test_job_named_in_two_old_notes_stays_with_the_later_note(box):
+    box.load([row("Oda", "Keep", "Keep Co")], (), "--force")
+    first = memory.remember(box.g, "", person_id="oda-keep", company="Tern Works", note="started there")
+    second = memory.remember(box.g, "", person_id="oda-keep", company="Tern Works", note="still there")
+    as_031(box, first["note_id"], "Tern Works")
+    as_031(box, second["note_id"], "Tern Works")
+    memory.forget_note(box.g, first["note_id"])
+    assert box.current("oda-keep") == ["Tern Works"]
+    assert box.person("oda-keep", "company") == ["Tern Works"]
+    memory.forget_note(box.g, second["note_id"])
+    assert box.current("oda-keep") == ["Keep Co"]
+
+
+def test_old_note_that_named_no_job_does_not_keep_it(box):
+    box.load([row("Oda", "Keep", "Keep Co")], (), "--force")
+    first = memory.remember(box.g, "", person_id="oda-keep", company="Tern Works", note="started there")
+    other = memory.remember(box.g, "", person_id="oda-keep", note="talked about Tern Works")
+    as_031(box, first["note_id"], "Tern Works")
+    as_031(box, other["note_id"])
+    memory.forget_note(box.g, first["note_id"])
+    assert box.current("oda-keep") == ["Keep Co"]
+
+
+def test_job_in_an_old_note_with_an_event_a_title_and_a_follow_up_stays(box):
+    box.load([row("Oda", "Keep", "Keep Co")], (), "--force")
+    first = memory.remember(box.g, "", person_id="oda-keep", company="Tern Works", note="started there")
+    second = memory.remember(box.g, "", person_id="oda-keep", company="Tern Works", event="Graph Night", note="more",
+                             title="Boss", follow_up="send it", due="2099-01-01")
+    as_031(box, first["note_id"], "Tern Works")
+    text, day = box.rows("MATCH (n:Note {id: $id}) RETURN n.text, n.on", id=second["note_id"])[0]
+    fold_key(box, second["note_id"], "Tern Works", "Graph Night", text, day, {"title": "Boss", "follow_up": "send it", "due": "2099-01-01"})
+    memory.forget_note(box.g, first["note_id"])
+    assert box.current("oda-keep") == ["Tern Works"]
+
+
+# ---------- the job report after a rebuild that stopped ----------
+
+def load_that_stops(box, connections, *flags):
+    """A real load that stops after it built the new graph, before the job report."""
+    sample = box.home / "sample"
+    shutil.rmtree(sample, ignore_errors=True)
+    shutil.copytree(PROJECT / "src/personal_brain/sample_data", sample)
+    file = sample / "linkedin/Connections.csv"
+    file.write_text(file.read_text(encoding="utf-8").rstrip("\n") + "\n" + "\n".join(connections) + "\n", encoding="utf-8")
+    code = ("import sys; sys.argv = ['load', '--sample', '--graph', %r] + %r\n"
+            "from personal_brain import job_changes, load_graph\n"
+            "job_changes.mark = lambda *a: sys.exit(3)\n"
+            "load_graph.main()" % (GRAPH, list(flags)))
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                       env={**os.environ, "PB_HOME": str(box.home), "PB_SAMPLE_DIR": str(sample), "FALKORDB_URL": ""})
+    assert r.returncode == 3, r.stderr[-800:]
+
+
+@pytest.mark.parametrize("flags", [(), ("--force",)])
+def test_job_report_survives_a_rebuild_that_stopped(box, flags):
+    box.load([row("Uma", "Bank", "Old Co")], (), "--force")
+    load_that_stops(box, [row("Uma", "Bank", "New Co")], *flags)
+    r = box.load([row("Uma", "Bank", "New Co")], (), *flags)
+    assert "Uma Bank: Old Co -> New Co" in r.stdout
+
+
+def test_job_report_survives_a_rebuild_that_stopped_with_notes(box):
+    box.load([row("Uma", "Bank", "Old Co")], (), "--force")
+    memory.remember(box.g, "", person_id="uma-bank", note="a note")
+    load_that_stops(box, [row("Uma", "Bank", "New Co")])
+    r = box.load([row("Uma", "Bank", "New Co")])
+    assert "Uma Bank: Old Co -> New Co" in r.stdout and box.notes() == ["a note"]
+

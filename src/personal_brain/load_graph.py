@@ -676,23 +676,31 @@ def main():
         db = FalkorDB(host="localhost", port=6379)
     graph = db.select_graph(GRAPH)
     exists = GRAPH in db.list_graphs()
-    old_jobs = job_changes.read_jobs(graph) if exists else {}
     kept = None
     place = ("cloud/" if "--cloud" in sys.argv else "local/") + GRAPH
+    saved = notes_backup.pending()
+    other_graph = saved and saved.get("place", place) != place
+    went = bool(saved and not other_graph and saved.get("graph_deleted"))
+    # After a rebuild that stopped, the graph holds only part of the old jobs, or the new ones. The backup has them.
+    old_jobs = saved["old_jobs"] if went and "old_jobs" in saved else job_changes.read_jobs(graph) if exists else {}
     if SAMPLE and exists and "--yes" not in sys.argv:
         confirm_sample(graph, place)
     if "--force" not in sys.argv:
         forgotten = forgotten_list()
-        kept = notes_backup.choose(notes_backup.pending(), notes_backup.snapshot(graph) if exists else None, place, forgotten)
-        if kept and kept["nodes"]:
-            notes_backup.save(kept)
+        kept = notes_backup.choose(saved, notes_backup.snapshot(graph) if exists else None, place, forgotten)
+        if saved and "graph_deleted" not in saved and kept["graph_deleted"]:
+            print("An older version stopped during a rebuild. Its backup has notes that this graph does not.\n"
+                  "They are back now. If you forgot one of them since, run personal-brain forget again.")
+    backup = kept or {"nodes": [], "about": [], "links": [], "place": place, "graph_deleted": went}
+    if not other_graph:
+        notes_backup.save({**backup, "old_jobs": old_jobs})
     try:
         graph.delete()
     except Exception:
         pass
-    if kept and kept["nodes"]:
+    if not other_graph:
         # From here on, the backup is the only copy. A stop before here leaves the graph as it was.
-        notes_backup.save({**kept, "graph_deleted": GRAPH not in db.list_graphs()})
+        notes_backup.save({**backup, "old_jobs": old_jobs, "graph_deleted": GRAPH not in db.list_graphs()})
     graph = db.select_graph(GRAPH)
 
     def run(query, rows, size=1000):

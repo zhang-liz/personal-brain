@@ -71,7 +71,10 @@ def merge(saved, live):
         return saved
     have = {n["props"]["id"] for n in saved["nodes"] if n["label"] == "Note"}
     new = {n["props"]["id"] for n in live["nodes"] if n["label"] == "Note"} - have
-    return {"nodes": saved["nodes"] + [n for n in live["nodes"] if n["props"]["id"] in new or n["props"].get("note") in new],
+    # A node in both changed last in the graph: a follow-up done since the backup stays done.
+    now = {(n["label"], n["props"]["id"]): n for n in live["nodes"]}
+    return {"nodes": [now.get((n["label"], n["props"]["id"]), n) for n in saved["nodes"]]
+                     + [n for n in live["nodes"] if n["props"]["id"] in new or n["props"].get("note") in new],
             "about": saved["about"] + [a for a in live["about"] if a["note"] in new],
             "links": saved["links"] + [l for l in live["links"] if owner(l["props"]) in new]}
 
@@ -84,6 +87,17 @@ def without_forgotten(snap, forgotten):
             "links": [l for l in snap["links"] if owner(l["props"]) not in notes and not {l["from"]["id"], l["to"]["id"]} & forgotten]}
 
 
+def whole(saved, live, forgotten):
+    """A backup from 0.3.1 does not say if the graph went. A rebuild puts the notes back last, so a note that is back
+    with all its links means that this graph is right, and a note that is gone was forgotten. With none back, it cannot tell."""
+    back = {n["props"]["id"] for n in live["nodes"] if n["label"] == "Note"} & {n["props"]["id"] for n in saved["nodes"] if n["label"] == "Note"}
+    about = {(a["note"], a["props"]["id"]) for a in live["about"]}
+    links = {(l["type"], l["from"]["id"], l["to"]["id"]) for l in live["links"]}
+    return bool(back) and all((a["note"], a["props"]["id"]) in about for a in saved["about"] if a["note"] in back) and all(
+        (l["type"], l["from"]["id"], l["to"]["id"]) in links for l in saved["links"]
+        if owner(l["props"]) in back and not {l["from"]["id"], l["to"]["id"]} & forgotten)
+
+
 def choose(saved, live, place, forgotten):
     """What a rebuild must keep: the backup from a rebuild that stopped, the live graph (None if it has none), or both."""
     if saved is None:
@@ -91,7 +105,7 @@ def choose(saved, live, place, forgotten):
     if saved.get("place", place) != place:
         raise SystemExit(f"A rebuild of {saved['place']} stopped halfway, and the only copy of its notes is in {BACKUP}.\n"
                          f"Run load for {saved['place']} first, or delete that file to drop those notes.")
-    if live and saved.get("graph_deleted") is False:
+    if live and (saved.get("graph_deleted") is False or ("graph_deleted" not in saved and whole(saved, live, forgotten))):
         return {**live, "place": place, "graph_deleted": False}    # it stopped before it deleted the graph, so the graph is right
     return {**without_forgotten(merge(saved, live), forgotten), "place": place, "graph_deleted": True}
 

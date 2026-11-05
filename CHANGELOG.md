@@ -20,6 +20,9 @@ Fixed:
 - A person from a note whom you forgot stays out of later imports, unless the graph had someone else with that name. `load` says who it left out.
 - The job report counts people, not jobs. Two new jobs show on one line.
 - The viewer's text box reads `Dr. Jonas` and `Node.js` correctly.
+- A backup left by 0.3.1 no longer brings back a forgotten note, or reopens a follow-up, when the graph is still whole. If none of its notes is in the graph, `load` keeps them and says so.
+- Forgetting the note that started a job keeps the job when another 0.3.1 note named it too.
+- The job report is complete after a rebuild that stopped: the backup now holds the old jobs.
 
 - One odd row or file no longer stops `load`: a line separator in a title, a blank date, a short row, a byte order mark, old bytes, an empty `Profile.csv`, or a job with no month. A person with no date stays in the graph.
 - `load --sample` works with no time zone data.
