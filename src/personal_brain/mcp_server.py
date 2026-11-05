@@ -16,7 +16,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
 from personal_brain import __version__, activity, memory
-from personal_brain.paths import cannot_reach
+from personal_brain.paths import cannot_reach, graph_missing
 
 GRAPH = None
 NO_DATABASE = "{} Tell the user to do this, then try again."
@@ -25,19 +25,22 @@ NO_DATABASE = "{} Tell the user to do this, then try again."
 def answer(fn, *args):
     """Errors go back to the agent as text it can act on (a Cypher typo, an unknown id), not a bare failure."""
     global GRAPH
-    try:
-        if GRAPH is None:
-            graph, _ = memory.connect()
-            memory.setup(graph)
-            GRAPH = graph
-        result = fn(GRAPH, *args)
-        activity.log(fn.__name__, result)
-        return result
-    except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError) as e:
-        GRAPH = None
-        return {"error": NO_DATABASE.format(cannot_reach(e))}
-    except Exception as e:
-        return {"error": str(e)}
+    for last_try in (False, True):
+        try:
+            if GRAPH is None:
+                graph, _ = memory.connect()
+                memory.setup(graph)
+                GRAPH = graph
+            result = fn(GRAPH, *args)
+            activity.log(fn.__name__, result)
+            return result
+        except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError) as e:
+            GRAPH = None
+            return {"error": NO_DATABASE.format(cannot_reach(e))}
+        except Exception as e:
+            if last_try or not graph_missing(e):
+                return {"error": str(e)}
+            GRAPH = None    # the graph went while this server ran (a restart with no volume): start it again, as on a new start
 
 
 server = MCPServer("personal-brain", version=__version__, instructions=(

@@ -6,7 +6,7 @@ import sys
 import redis
 
 from personal_brain import __version__
-from personal_brain.paths import HOME, cannot_reach
+from personal_brain.paths import HOME, NO_GRAPH, BadUrl, cannot_reach, graph_missing
 
 USAGE = f"""personal-brain {__version__}: an MCP server that gives your AI agent memory of your professional network.
 
@@ -63,6 +63,14 @@ def main():
                 run("export_stories", *args)
         except redis.exceptions.ConnectionError as e:
             sys.exit(cannot_reach(e))
+        except redis.exceptions.ResponseError as e:
+            if not graph_missing(e):
+                raise
+            sys.exit(NO_GRAPH)
+        except BadUrl as e:
+            sys.exit(str(e))
+        except KeyboardInterrupt:
+            sys.exit("Stopped.")
     elif command in ("", "-h", "--help", "help"):
         print(USAGE)
     else:

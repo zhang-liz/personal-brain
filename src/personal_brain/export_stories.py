@@ -9,22 +9,22 @@ the node ids it touched, so the viewer can light them up.
 import json
 import os
 import sys
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from falkordb import FalkorDB
 
-from personal_brain.paths import HOME, cloud_url
+from personal_brain.paths import HOME, cloud_url, open_url
 OUT = Path(os.environ.get("PB_VIEWER_DIR", HOME / "data" / "viewer")) / "stories.json"
 
 STORIES = [
     {
         "id": "founders",
-        "title": "Which founders did I meet at events this year?",
+        "title": "Which founders did I meet at events in the last year?",
         "focus": "MATCH (m:Me) RETURN id(m)",
         "cypher": f"""MATCH (me:Me)-[:ATTENDED]->(e:Event)<-[:MET_AT]-(p:Person)
       -[:INTO]->(:Topic {{name:'Founder'}})
-WHERE e.date >= '{date.today().year}-01-01'
+WHERE e.date >= '{date.today() - timedelta(days=365)}'
 RETURN id(me), id(e), id(p)""",
         "pairs": [(0, 1), (1, 2)],
     },
@@ -114,7 +114,7 @@ RETURN id(me), id(friend), id(p)""",
 
 def connect():
     if "--cloud" in sys.argv:
-        return FalkorDB.from_url(cloud_url()), "FalkorDB Cloud"
+        return open_url(cloud_url()), "FalkorDB Cloud"
     return FalkorDB(host="localhost", port=6379), "local FalkorDB"
 
 

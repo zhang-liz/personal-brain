@@ -11,6 +11,7 @@ viewer's own page can use it: a request from another website is refused. Nothing
 here deletes. To clear notes, run `personal-brain forget all-notes`.
 """
 
+import errno
 import json
 import shutil
 import time
@@ -18,7 +19,7 @@ from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from personal_brain.paths import HOME, PACKAGE
+from personal_brain.paths import HOME, NO_GRAPH, PACKAGE, graph_missing
 from personal_brain import activity, memory
 from personal_brain.load_graph import TOPIC_RE
 
@@ -29,7 +30,7 @@ GRAPH, SOURCE = memory.connect()
 memory.setup(GRAPH)
 
 def q(cypher, params=None):
-    return GRAPH.query(cypher, params or {})
+    return GRAPH.ro_query(cypher, params or {})
 
 
 def remember(text):
@@ -87,6 +88,11 @@ THIS_SERVER = ("127.0.0.1:8765", "localhost:8765")
 
 
 MAX_BODY = 10_000
+MAX_TEXT = 500
+
+
+def problem(exc):
+    return NO_GRAPH if graph_missing(exc) else str(exc)
 
 
 class BadRequest(Exception):
@@ -145,7 +151,10 @@ class Handler(SimpleHTTPRequestHandler):
                 since = int(parse_qs(url.query).get("since", ["0"])[0])
             except ValueError:
                 return self.send_json(400, {"error": "since must be a number."})
-            return self.send_json(200, delta(since))
+            try:
+                return self.send_json(200, delta(since))
+            except Exception as exc:
+                return self.send_json(500, {"error": problem(exc)})
         if url.path == "/api/activity":
             try:
                 seq = int(parse_qs(url.query).get("since", ["-1"])[0])
@@ -165,11 +174,13 @@ class Handler(SimpleHTTPRequestHandler):
         t0 = time.time()
         try:
             if url.path == "/api/remember":
-                status, out = remember(str(body.get("text", ""))[:500])
+                text = str(body.get("text", ""))
+                status, out = (remember(text) if len(text) <= MAX_TEXT else
+                               (400, {"error": f"That is longer than {MAX_TEXT} characters. Make it shorter, or ask your agent: it can save a long note."}))
             else:
                 status, out = 404, {"error": "not found"}
         except Exception as exc:  # surface FalkorDB errors to the page during the demo
-            status, out = 500, {"error": str(exc)}
+            status, out = 500, {"error": problem(exc)}
         out["total_ms"] = round((time.time() - t0) * 1000)
         self.send_json(status, out)
 
@@ -182,7 +193,12 @@ def main():
     if not (ROOT / "graph.json").exists():
         raise SystemExit("The viewer has no data yet. Run personal-brain export first.")
     shutil.copytree(PACKAGE / "viewer", ROOT, dirs_exist_ok=True)
-    server = ThreadingHTTPServer(("127.0.0.1", 8765), partial(Handler, directory=str(ROOT)))
+    try:
+        server = ThreadingHTTPServer(("127.0.0.1", 8765), partial(Handler, directory=str(ROOT)))
+    except OSError as e:
+        if e.errno != errno.EADDRINUSE:
+            raise
+        raise SystemExit("Port 8765 is in use. The viewer may be running already: open http://127.0.0.1:8765.") from None
     print(f"serving http://127.0.0.1:8765 (live API on {SOURCE})")
     server.serve_forever()
 

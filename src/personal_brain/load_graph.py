@@ -14,6 +14,8 @@ A rebuild replaces the graph, and keeps your agent's notes and what they added.
 """
 
 import csv
+import functools
+import io
 import itertools
 import json
 import re
@@ -24,18 +26,29 @@ import urllib.parse
 from collections import Counter, defaultdict
 from datetime import date, datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from falkordb import FalkorDB
 
 from personal_brain import job_changes, notes_backup
-from personal_brain.paths import HOME, PACKAGE, cloud_url
+from personal_brain.paths import HOME, PACKAGE, cloud_url, open_url, printable
 SAMPLE = "--sample" in sys.argv
 SAMPLE_DIR = Path(os.environ.get("PB_SAMPLE_DIR", PACKAGE / "sample_data"))
 ENRICHED = (SAMPLE_DIR if SAMPLE else HOME / "data") / "enriched"
 SETTINGS = (SAMPLE_DIR if SAMPLE else HOME) / "my_brain.json"
 FORGOTTEN = HOME / "data" / "forgotten.json"   # people you told the agent to forget
-GRAPH = sys.argv[sys.argv.index("--graph") + 1] if "--graph" in sys.argv else os.environ.get("PB_GRAPH", "network")
+
+
+def graph_name():
+    if "--graph" not in sys.argv:
+        return os.environ.get("PB_GRAPH", "network")
+    at = sys.argv.index("--graph") + 1
+    if at == len(sys.argv) or sys.argv[at].startswith("--"):
+        sys.exit("--graph needs a name: --graph <name>")
+    return sys.argv[at]
+
+
+GRAPH = graph_name()
 NOW = date.today().year + date.today().month / 12
 csv.field_size_limit(10**9)
 
@@ -71,15 +84,18 @@ def fold(text):
 
 def load_settings():
     """Your own labels (my_brain.json, see my_brain.example.json). Optional."""
-    s = json.loads(SETTINGS.read_text(encoding="utf-8")) if SETTINGS.exists() else {}
-    # Names for the days you added many connections ("YYYY-MM-DD": "Event name").
-    events = {date.fromisoformat(d): name for d, name in s.get("events", {}).items()}
-    # Companies that should never count as well-funded startups (e.g. subsidiaries).
-    skip = {norm(c) for c in s.get("skip_companies", [])}
+    try:
+        s = json.loads(SETTINGS.read_text(encoding="utf-8")) if SETTINGS.exists() else {}
+        # Names for the days you added many connections ("YYYY-MM-DD": "Event name").
+        events = {date.fromisoformat(d): name for d, name in s.get("events", {}).items()}
+        # Companies that should never count as well-funded startups (e.g. subsidiaries).
+        skip = {norm(c) for c in s.get("skip_companies", [])}
+    except (ValueError, AttributeError, TypeError) as e:
+        sys.exit(f"Cannot read {SETTINGS}: {e}. See my_brain.example.json.")
     return events, skip
 
 
-KNOWN_EVENTS, NOT_STARTUPS = load_settings()
+KNOWN_EVENTS, NOT_STARTUPS = {}, set()    # from load_settings. Only load reads the file, so a typo in it cannot stop the MCP server.
 
 TOPICS = {
     "AI Agents": [r"\bagents?\b", r"\bagentic\b", r"multi-agent"],
@@ -194,8 +210,8 @@ def years(tp):
     end = (tp or {}).get("endDate") or {}
     if not start.get("year"):
         return None, None
-    a = start["year"] + (start.get("month", 1) - 1) / 12
-    b = end["year"] + (end.get("month", 12) - 1) / 12 if end.get("year") else NOW
+    a = start["year"] + ((start.get("month") or 1) - 1) / 12
+    b = end["year"] + ((end.get("month") or 12) - 1) / 12 if end.get("year") else NOW
     return round(a, 2), round(b, 2)
 
 
@@ -214,27 +230,44 @@ def experience_years(positions, rx):
     return round(total, 1)
 
 
+def read_csv(path, starts_with=""):
+    """The rows of a LinkedIn file. A missing cell or column is empty, and odd bytes cannot stop the import.
+
+    starts_with skips the notes LinkedIn writes above the header line."""
+    text = path.read_text(encoding="utf-8-sig", errors="replace").replace("\x00", "")
+    if starts_with:
+        header = re.search(rf"^{starts_with}", text, re.M)
+        if not header:
+            sys.exit(f"{path} has no line that starts with {starts_with!r}. Is it from a LinkedIn export?")
+        text = text[header.start():]
+    for row in csv.DictReader(io.StringIO(text, newline="")):
+        yield defaultdict(str, {k.strip(): v or "" for k, v in row.items() if k})
+
+
+def connected_day(text):
+    try:
+        return datetime.strptime(text.strip(), "%d %b %Y").date()
+    except ValueError:
+        return None
+
+
 def load_me():
     """Your name and headline, from Profile.csv in the export (a connections-only export has none)."""
-    if not (find_export() / "Profile.csv").exists():
+    row = next(read_csv(find_export() / "Profile.csv"), None) if (find_export() / "Profile.csv").exists() else None
+    if row is None:
         return {"name": "Me", "title": "", "location": ""}
-    with open(find_export() / "Profile.csv", encoding="utf-8") as f:
-        row = next(csv.DictReader(f))
-    return {"name": f"{row['First Name']} {row['Last Name']}".strip(), "title": row.get("Headline") or "",
-            "location": row.get("Geo Location") or ""}
+    return {"name": f"{row['First Name']} {row['Last Name']}".strip() or "Me", "title": row["Headline"], "location": row["Geo Location"]}
 
 
 def load_connections():
-    lines = (find_export() / "Connections.csv").read_text(encoding="utf-8").splitlines()
-    start = next(i for i, line in enumerate(lines) if line.startswith("First Name,"))
     forgotten = forgotten_list()
     people = {}
-    for row in csv.DictReader(lines[start:]):
+    for row in read_csv(find_export() / "Connections.csv", "First Name,"):
         slug = slug_of(row["URL"])
         if not slug or slug in forgotten:
             continue
         if "name:" + fold(f"{row['First Name']} {row['Last Name']}") in forgotten:
-            print(f"Left out {row['First Name']} {row['Last Name']}: you forgot someone with this name. To undo, edit {FORGOTTEN}.")
+            print(printable(f"Left out {row['First Name']} {row['Last Name']}: you forgot someone with this name. To undo, edit {FORGOTTEN}."))
             continue
         people[slug] = {
             "id": slug,
@@ -242,8 +275,11 @@ def load_connections():
             "url": row["URL"].strip(),
             "company": row["Company"].strip(),
             "title": row["Position"].strip(),
-            "connected_on": datetime.strptime(row["Connected On"].strip(), "%d %b %Y").date(),
+            "connected_on": connected_day(row["Connected On"]),
         }
+    undated = sum(p["connected_on"] is None for p in people.values())
+    if undated:
+        print(f"{undated} connection{'s have' if undated > 1 else ' has'} no date that this can read. They stay in the graph, and in no event.")
     return people
 
 
@@ -289,12 +325,11 @@ def load_messages():
     """Message counts per person, group-chat participant sets, and each person's last message date (by slug)."""
     if not (find_export() / "messages.csv").exists():
         return Counter(), [], {}
-    with open(find_export() / "messages.csv", encoding="utf-8") as f:
-        rows = [(row["CONVERSATION ID"],
-                 {slug_of(u) for u in [row["SENDER PROFILE URL"]] + row["RECIPIENT PROFILE URLS"].split(",")
-                  if u.strip()} - {""},
-                 (row.get("DATE") or "")[:10])    # only the day: the text of a message never leaves the export
-                for row in csv.DictReader(f)]
+    rows = [(row["CONVERSATION ID"],
+             {slug_of(u) for u in [row["SENDER PROFILE URL"]] + row["RECIPIENT PROFILE URLS"].split(",")
+              if u.strip()} - {""},
+             row["DATE"][:10])    # only the day: the text of a message never leaves the export
+            for row in read_csv(find_export() / "messages.csv")]
     # You are in almost every message: the most common profile is you.
     mine = Counter(s for _, slugs, _ in rows for s in slugs).most_common(1)
     me = mine[0][0] if mine else ""
@@ -316,11 +351,13 @@ def load_share_hints():
     """Your own posts (date, first words), used as hints to name inferred events."""
     hints = []
     for path in find_export().glob("Shares*.csv"):
-        with open(path, encoding="utf-8") as f:
-            for row in csv.DictReader(f):
-                if row["Date"][:10]:
-                    text = " ".join(row["ShareCommentary"].replace('"', "").split())
-                    hints.append((date.fromisoformat(row["Date"][:10]), text[:90]))
+        for row in read_csv(path):
+            try:
+                day = date.fromisoformat(row["Date"][:10])
+            except ValueError:
+                continue
+            text = " ".join(row["ShareCommentary"].replace('"', "").split())
+            hints.append((day, text[:90]))
     return hints
 
 
@@ -328,13 +365,17 @@ def load_share_hints():
 EVENT_TOPICS = ["AI Agents", "Agent Memory", "Knowledge Graphs", "RAG & Search", "LLMs & GenAI",
                 "Developer Relations"]
 WORDS = Path("/usr/share/dict/words")
-COMMON_WORDS = set(WORDS.read_text(encoding="utf-8").lower().split()) if WORDS.exists() else set()
+
+
+@functools.lru_cache(maxsize=1)
+def common_words():
+    return set(WORDS.read_text(encoding="utf-8", errors="ignore").lower().split()) if WORDS.exists() else set()
 
 
 def is_common(name):
     """True when every word of a name is an English word ("Open Source", "Builders", "The Post")."""
     words = re.findall(r"[a-z0-9]+", name.lower())   # "neo4j" is one word, and not an English one
-    return bool(words) and all(w in COMMON_WORDS or (w.endswith("s") and w[:-1] in COMMON_WORDS)
+    return bool(words) and all(w in common_words() or (w.endswith("s") and w[:-1] in common_words())
                                for w in words)
 
 
@@ -361,6 +402,19 @@ def works_at(bio, name):
     return False
 
 
+def event_start(e):
+    """When an event starts, in its own time zone. With no time zone data, or an unknown zone, in UTC."""
+    start = datetime.fromisoformat(e["startAt"].replace("Z", "+00:00"))
+    try:
+        start = start.astimezone(ZoneInfo(e.get("timezone") or "UTC"))
+    except (ZoneInfoNotFoundError, ValueError):
+        pass
+    # The made-up sample must stay in the future, however old the package is.
+    while SAMPLE and start.date() < date.today():
+        start = start.replace(year=start.year + 1)
+    return start
+
+
 def load_upcoming(people, current, countries):
     """Upcoming events on your topics, and how each one links to your network.
 
@@ -376,8 +430,7 @@ def load_upcoming(people, current, countries):
                if len(k) >= 3 and k not in BAY_AREA and "san francisco" not in k]
     rows, hosted = [], []
     for e in items.values():
-        start = datetime.fromisoformat(e["startAt"].replace("Z", "+00:00"))
-        start = start.astimezone(ZoneInfo(e.get("timezone") or "UTC"))
+        start = event_start(e)
         text = f"{e['name']} {(e.get('description') or '')[:2000]}"
         topics = [t for t in EVENT_TOPICS if TOPIC_RE[t].search(text)]
         if start.date() < date.today() or not (topics or {"AI", "Tech"} & set(e.get("categoryNames") or [])):
@@ -426,6 +479,8 @@ def confirm_sample(graph, place):
 
 
 def main():
+    global KNOWN_EVENTS, NOT_STARTUPS
+    KNOWN_EVENTS, NOT_STARTUPS = load_settings()
     if not SAMPLE:
         print(f"Reading {find_export()}")
     people = load_connections()
@@ -468,7 +523,7 @@ def main():
         persons.append({
             "id": slug, "name": p["name"], "search": fold(p["name"]), "url": p["url"], "headline": headline,
             "about": about, "location": location, "title": p["title"],
-            "company": p["company"], "connected_on": p["connected_on"].isoformat(),
+            "company": p["company"], "connected_on": p["connected_on"] and p["connected_on"].isoformat(),
             "messages": msg_counts.get(slug, 0), "last_message": last_messages.get(slug), "enriched": bool(prof),
             "event_contact": bool(EVENT_ROLE_RE.search(role_text)),
         })
@@ -557,7 +612,8 @@ def main():
     # Inferred events: days when you added 5+ connections.
     by_day = defaultdict(list)
     for slug, p in people.items():
-        by_day[p["connected_on"]].append(slug)
+        if p["connected_on"]:
+            by_day[p["connected_on"]].append(slug)
     events, met = [], []
     for day, slugs in by_day.items():
         if len(slugs) < 5:
@@ -571,18 +627,16 @@ def main():
     # Your own jobs and schools.
     me_jobs, me_schools = [], []
     if (find_export() / "Positions.csv").exists():
-        with open(find_export() / "Positions.csv", encoding="utf-8") as f:
-            for row in csv.DictReader(f):
-                key = company_key(row["Company Name"])
-                if key:
-                    me_jobs.append({"c": key, "title": row["Title"]})
+        for row in read_csv(find_export() / "Positions.csv"):
+            key = company_key(row["Company Name"])
+            if key:
+                me_jobs.append({"c": key, "title": row["Title"]})
     if (find_export() / "Education.csv").exists():
-        with open(find_export() / "Education.csv", encoding="utf-8") as f:
-            for row in csv.DictReader(f):
-                key = norm(row["School Name"])
-                if key:
-                    schools.setdefault(key, row["School Name"].strip())
-                    me_schools.append({"s": key})
+        for row in read_csv(find_export() / "Education.csv"):
+            key = norm(row["School Name"])
+            if key:
+                schools.setdefault(key, row["School Name"].strip())
+                me_schools.append({"s": key})
 
     # Funding: company facts plus Investor nodes from Crunchbase rounds.
     crunchbase = load_companies()
@@ -622,7 +676,7 @@ def main():
           f"companies {sum(h['label'] == 'Company' for h in hosted)})")
 
     if "--cloud" in sys.argv:
-        db = FalkorDB.from_url(cloud_url())
+        db = open_url(cloud_url())
     else:
         db = FalkorDB(host="localhost", port=6379)
     graph = db.select_graph(GRAPH)

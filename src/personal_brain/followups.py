@@ -6,8 +6,7 @@
 import redis
 
 from personal_brain import memory
-from personal_brain.notes import printable
-from personal_brain.paths import cannot_reach
+from personal_brain.paths import cannot_reach, printable
 
 
 def main():

@@ -20,7 +20,7 @@ from falkordb import FalkorDB, Edge, Node, Path as GraphPath
 from personal_brain.companies import core, one_edit, same_company, typo
 from personal_brain.load_graph import EVENT_ROLE_RE, FORGOTTEN, TOPIC_RE, city_of, create_search_indexes, fold, forgotten_list, norm, without_accents
 
-from personal_brain.paths import env_file_url
+from personal_brain.paths import env_file_url, open_url
 MAX_ROWS = 50        # rows ask() hands back to the agent
 TIMEOUT_MS = 5000    # longest an ask() query may run
 SAVE_TIME_LIMIT_S = 300    # a note still saving after this long stopped halfway
@@ -52,7 +52,7 @@ Community & Events, Partnerships, Investing, Founder, Podcast & Media."""
 def connect(graph=None):
     """The graph on FalkorDB Cloud (FALKORDB_URL in the environment or .env), else local FalkorDB."""
     url = os.environ["FALKORDB_URL"] if "FALKORDB_URL" in os.environ else env_file_url()
-    db = FalkorDB.from_url(url) if url else FalkorDB(host="localhost", port=6379)
+    db = open_url(url) if url else FalkorDB(host="localhost", port=6379)
     return db.select_graph(graph or os.environ.get("PB_GRAPH", "network")), ("FalkorDB Cloud" if url else "local FalkorDB")
 
 
@@ -505,12 +505,12 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
             **({"follow_up_id": fid} if fid else {}), "undo": f"personal-brain forget note {nid}"}
 
 
-# "met NAME [from COMPANY] [at EVENT][, note]". A dot ends the name only with a space after it, and never after "Dr".
+# "met NAME [from COMPANY] [at EVENT][, note]". A dot ends the name only with a space after it, and never after "Dr", "St" or an initial.
 MET_RE = re.compile(
     r"^\s*(?:i\s+)?(?:just\s+)?met\s+(?P<name>.+?)"
     r"(?:\s+(?:from|of)\s+(?P<company>.+?))?"
     r"(?:\s+(?:at|during)\s+(?P<event>.+?))?"
-    r"\s*(?:(?:(?<!\bdr)(?<!\bmr)(?<!\bms)(?<!\bmrs)(?<!\bprof)\.(?=\s|$)|[;:!]|,|\s[-–—]\s)\s*(?P<note>.*))?$", re.I)
+    r"\s*(?:(?:(?<!\bdr)(?<!\bmr)(?<!\bms)(?<!\bmrs)(?<!\bprof)(?<!\bst)(?<!\b[a-z])\.(?=\s|$)|[;:!]|,|\s[-–—]\s)\s*(?P<note>.*))?$", re.I)
 
 
 def parse_met(text):

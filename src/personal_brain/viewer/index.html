@@ -718,17 +718,21 @@ function stepTimelapse(now) {
 // ---------- live "remember" (writes to FalkorDB through the local server) ----------
 const rememberForm = document.getElementById("remember"), rememberText = document.getElementById("rememberText");
 const rememberHint = document.getElementById("rememberHint");
+const FULL_MAP = "New notes are saved, but this map has no room for them. Run personal-brain export, then reload.";
 function addGraphData(data) {
   const fresh = [];
+  let full = false;
   for (const n of data.nodes) {
     const i = n.id;
-    if (i >= CAP_N || exists[i] || T_IDX[n.label] === undefined) continue;
+    if (exists[i] || T_IDX[n.label] === undefined) continue;
+    if (i >= CAP_N) { full = true; continue; }
     exists[i] = 1; typeOf[i] = T_IDX[n.label]; names[i] = n.name; subs[i] = n.sub; whens[i] = n.when;
     nN = Math.max(nN, i + 1); fresh.push(i);
   }
   for (const e of data.edges) {
     const t = edgeTypeIndex(e.type), key = `${e.s},${e.t},${t}`;
-    if (edgeKeys.has(key) || nE >= CAP_E || !exists[e.s] || !exists[e.t]) continue;
+    if (edgeKeys.has(key) || !exists[e.s] || !exists[e.t]) continue;
+    if (nE >= CAP_E) { full = true; continue; }
     edgeKeys.add(key);
     ES[nE] = e.s; ET[nE] = e.t; EK[nE] = t; styleEdge(nE);
     for (const v of [e.s, e.t]) { if (!extraAdj.has(v)) extraAdj.set(v, []); extraAdj.get(v).push(nE); degree[v]++; }
@@ -752,6 +756,7 @@ function addGraphData(data) {
   const now = performance.now();
   fresh.forEach((i) => spawning.set(i, now));
   updateStats(); renderLayers();
+  if (full) rememberHint.textContent = FULL_MAP;
   return fresh;
 }
 rememberForm.addEventListener("submit", async (ev) => {
@@ -766,6 +771,7 @@ rememberForm.addEventListener("submit", async (ev) => {
     if (!res.ok) { rememberHint.textContent = data.error || "Could not save"; return; }
     rememberText.value = "";
     addGraphData(data);
+    if (data.person >= CAP_N) { rememberHint.textContent = FULL_MAP; return; }
     const p = data.parsed, coworkers = data.edges.filter((e) => e.type === "KNOWS").length;
     rememberHint.textContent = `Saved in ${data.ms} ms on ${data.source || "FalkorDB"}`;
     showToast(`<b></b><small></small>`, 3500);

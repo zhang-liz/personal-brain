@@ -15,7 +15,7 @@ from pathlib import Path
 
 from falkordb import FalkorDB
 
-from personal_brain.paths import HOME, cloud_url
+from personal_brain.paths import HOME, NO_GRAPH, cloud_url, open_url
 OUT = Path(os.environ.get("PB_VIEWER_DIR", HOME / "data" / "viewer")) / "graph.json"
 PAGE = 500  # node ids per page
 CAP = 10000  # FalkorDB Cloud result-set cap
@@ -23,7 +23,7 @@ CAP = 10000  # FalkorDB Cloud result-set cap
 
 def connect():
     if "--cloud" in sys.argv:
-        return FalkorDB.from_url(cloud_url()), "FalkorDB Cloud"
+        return open_url(cloud_url()), "FalkorDB Cloud"
     return FalkorDB(host="localhost", port=6379), "local FalkorDB"
 
 
@@ -31,7 +31,9 @@ def main():
     db, where = connect()
     g = db.select_graph(os.environ.get("PB_GRAPH", "network"))
     t0 = time.time()
-    max_id = g.query("MATCH (n) RETURN max(id(n))").result_set[0][0]
+    max_id = g.ro_query("MATCH (n) RETURN max(id(n))").result_set[0][0]    # a read, so that it does not make an empty graph
+    if max_id is None:
+        sys.exit(NO_GRAPH)
 
     def edge_page(lo, hi):
         rows = g.query("MATCH (a)-[r]->(b) WHERE id(a) >= $lo AND id(a) < $hi"

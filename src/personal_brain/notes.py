@@ -12,14 +12,9 @@ import sys
 import redis
 
 from personal_brain import memory
-from personal_brain.paths import cannot_reach
+from personal_brain.paths import cannot_reach, printable
 
 DEFAULT_LIMIT = 20
-
-
-def printable(text):
-    """Notes can hold any text, so keep characters that would control the terminal out of it."""
-    return "".join(c for c in text or "" if c.isprintable())
 
 
 def main():

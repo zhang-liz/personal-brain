@@ -15,7 +15,7 @@ import sys
 import redis
 
 from personal_brain import activity, memory
-from personal_brain.paths import HOME, cannot_reach
+from personal_brain.paths import HOME, cannot_reach, printable
 
 USAGE = ("Use: personal-brain forget person <name or id> [--yes], personal-brain forget note <id> [--yes], "
          "or personal-brain forget all-notes [--yes]")
@@ -32,7 +32,7 @@ def person_to_forget(g, text):
     if len(same) > 1:
         print(f"{len(same)} people are named {text}. Run this again with one id:")
         for m in same:
-            print(f"  {m['id']}  {', '.join(m.get('works_at', [])) or 'no current job'}")
+            print(printable(f"  {m['id']}  {', '.join(m.get('works_at', [])) or 'no current job'}"))
         sys.exit(1)
     return same[0]["id"], same[0]["name"]
 
@@ -75,10 +75,10 @@ def main():
         else:
             id_, description = person_to_forget(g, target) if what == "person" else note_to_forget(g, target)
         if not yes:
-            print(f"Delete {description}, on {where}? This cannot be undone. [y/N] ", end="", flush=True)
+            print(printable(f"Delete {description}, on {where}? This cannot be undone. [y/N] "), end="", flush=True)
             if sys.stdin.readline().strip().lower() not in ("y", "yes"):
                 sys.exit("Nothing deleted.")
-        print(f"Deleted {memory.forget_all_notes(g)} nodes." if every_note else memory.forget(g, what, id_))
+        print(f"Deleted {memory.forget_all_notes(g)} nodes." if every_note else printable(str(memory.forget(g, what, id_))))
         refresh_viewer(where)
     except redis.exceptions.ConnectionError as e:
         sys.exit(cannot_reach(e))
