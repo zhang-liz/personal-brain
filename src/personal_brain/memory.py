@@ -571,6 +571,28 @@ def ask(g, cypher, params=None):
 
 # ---------- forget ----------
 
+def old_notes_on_job(g, nid, note, pid, job, job_name):
+    """Notes from 0.3.1 that also named this job. They have no job_note, but their retry key holds the words they were given."""
+    found = []
+    params = {"pid": pid, "nid": nid, "on": note.get("on", "")}
+    rows = g.ro_query("MATCH (m:Note)-[:ABOUT]->(p:Person {id: $pid}) WHERE m.id <> $nid AND m.saved_at IS NULL AND m.job_note IS NULL"
+                      " AND m.key IS NOT NULL AND m.on >= $on RETURN properties(m), properties(p) ORDER BY m.on", params).result_set
+    for m, person in rows:
+        ids = {"pid": pid, "m": m["id"]}
+        events = [e for (e,) in g.ro_query("MATCH (:Person {id: $pid})-[:MET_AT {note: $m}]->(e:Event) RETURN e.name", ids).result_set] or [""]
+        extra = {f: person[f] for f in FIELDS if m.get(f"set_{f}") and person.get(f"{f}_note") == m["id"]}
+        for text, due in g.ro_query("MATCH (f:FollowUp {note: $m}) RETURN f.text, f.due", ids).result_set:
+            extra.update(follow_up=text, due=due or "")
+        for (done,) in g.ro_query("MATCH (f:FollowUp {done_by: $m}) RETURN f.id", ids).result_set:
+            extra["done"] = done
+        extra = sorted((k, v) for k, v in extra.items() if v)
+        said = {hashlib.sha256(json.dumps([fold(company), fold(event), fold(m["text"]), m["on"], extra]).encode()).hexdigest()[:16]
+                for company in (job, job_name) for event in events}
+        if m["key"] in said:
+            found.append(m["id"])
+    return found
+
+
 def forget_note(g, nid):
     """Undo one note: every relationship and node it made, and any job it ended. What other notes say stays."""
     counts = {"jobs_reopened": 0}
@@ -590,6 +612,9 @@ def forget_note(g, nid):
     ended_by, job, job_name = started[0] if started else (None, None, None)
     # A later note says this person has this job too, so the job stays and belongs to that note now.
     also = g.ro_query("MATCH (m:Note {job_note: $nid}) RETURN m.id", params).result_set if started else []
+    if started and not also:
+        also = [[m] for pid in people for m in old_notes_on_job(g, nid, note, pid, job, job_name)]
+        g.query("MATCH (m:Note) WHERE m.id IN $ids SET m.job_note = $nid", {**params, "ids": [m for (m,) in also]})
     if also:
         keep = {**params, "keep": also[0][0], "job": job}
         g.query("MATCH (m:Note {job_note: $nid}) SET m.job_note = CASE WHEN m.id = $keep THEN NULL ELSE $keep END", keep)
