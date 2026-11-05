@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.2 (2026-11-04)
 
 Fixed:
 - A rebuild keeps all of a note's links. FalkorDB returns at most 10,000 rows by default, so the backup lost the rest, and people could lose their current job, while `load` still said it kept every note.
