@@ -30,6 +30,7 @@ dependencies = [
     "igraph==1.0.0",
     "mcp>=2.3,<3",
     "redis",
+    "tzdata; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]

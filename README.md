@@ -102,7 +102,7 @@ Run `personal-brain export`, then `personal-brain view`, and open http://127.0.0
 - Shows your whole network as a galaxy in WebGL (tested with 19k nodes and 117k edges), with a 2D / 3D toggle.
 - **Time-lapse**: watch your network grow, connection by connection, with your events popping up.
 - **Ask the graph**: a question types itself, then its Cypher query, then the answer lights up with light pulses along the paths. Example questions:
-  - Which founders did I meet at events this year?
+  - Which founders did I meet at events in the last year?
   - Who in my network works at big tech?
   - Who can warm-intro me to people at well-funded startups?
   - Which startups host AI events, and who do I know there?
