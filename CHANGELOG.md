@@ -20,6 +20,9 @@ Fixed:
 - A person from a note whom you forgot stays out of later imports, unless the graph had someone else with that name. `load` says who it left out.
 - The job report counts people, not jobs. Two new jobs show on one line.
 - The viewer's text box reads `Dr. Jonas` and `Node.js` correctly.
+- The viewer's stories read every row. Before, a story with more than 10,000 rows lit up only part of its answer.
+- An open viewer updates itself when an export writes new files, when it needs more room, or when an id comes to mean someone else. Before, it could show a forgotten person, or the wrong name for a new person, until you reloaded it. You no longer reload by hand.
+- `load` writes the viewer's files again, because a rebuild gives every node a new id. Before, the viewer showed the wrong people until you ran `export`.
 - A company or event one letter off a known one no longer merges on a guess. `remember` saves nothing and returns `needs_company` or `needs_event`, so the agent asks. A rebuild and the job report treat them as two companies.
 - A backup left by 0.3.1 no longer brings back a forgotten note, or reopens a follow-up, when the graph is still whole. If none of its notes is in the graph, `load` keeps them and says so.
 - Forgetting the note that started a job keeps the job when another 0.3.1 note named it too.

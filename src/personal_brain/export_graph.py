@@ -15,7 +15,7 @@ from pathlib import Path
 
 from falkordb import FalkorDB
 
-from personal_brain.paths import HOME, NO_GRAPH, cloud_url, open_url
+from personal_brain.paths import HOME, NO_GRAPH, cloud_url, open_url, write_whole
 OUT = Path(os.environ.get("PB_VIEWER_DIR", HOME / "data" / "viewer")) / "graph.json"
 PAGE = 500  # node ids per page
 CAP = 10000  # FalkorDB Cloud result-set cap
@@ -90,7 +90,7 @@ def main():
         "edges": [[index[a], index[b], types.index(t)] for a, b, t in edges],
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    write_whole(OUT, json.dumps(data, ensure_ascii=False, separators=(",", ":")))
     print(f"exported from {where}: {len(ids)} nodes, {len(edges)} edges "
           f"in {time.time() - t0:.1f}s -> {OUT} ({OUT.stat().st_size / 1e6:.1f} MB)")
 
