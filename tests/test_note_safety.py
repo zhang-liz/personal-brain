@@ -844,12 +844,12 @@ def test_a_person_with_a_skill_twice_shows_it_once(box):
         assert len(p["why"]) == len({(w["from"], w["text"]) for w in p["why"]})
 
 
-@pytest.mark.parametrize("seed", range(3))
-def test_company_follows_the_job_after_several_forgets(box, seed):
+@pytest.mark.parametrize("order", list(itertools.permutations(range(3))))
+def test_company_follows_the_job_after_several_forgets(box, order):
     box.load([row("Cal", "Company", "Old Co")], (), "--force")
     notes = [memory.remember(box.g, "", person_id="cal-company", company="Third Co", note="moved")["note_id"],
              memory.remember(box.g, "", person_id="cal-company", company="Old Co", ended_jobs=[], note="back part time")["note_id"],
-             memory.remember(box.g, "", person_id="cal-company", company="Third Co", ended_jobs=["Old Co"], note="moved again")["note_id"]]
-    for i in [(0, 1, 2), (2, 1, 0), (1, 0, 2)][seed]:
+             memory.remember(box.g, "", person_id="cal-company", company="Third Co", ended_jobs=["Old Co"], note="only this one now")["note_id"]]
+    for i in order:
         memory.forget_note(box.g, notes[i])
     assert box.current("cal-company") == ["Old Co"] and company_of(box, "cal-company") == "Old Co"
