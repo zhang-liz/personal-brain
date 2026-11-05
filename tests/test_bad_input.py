@@ -283,10 +283,6 @@ def test_sample_loads_with_no_time_zone_data(folder):
     assert len(folder.people()) > 200
 
 
-def test_windows_gets_time_zone_data():
-    assert 'tzdata; sys_platform == \'win32\'' in (PROJECT / "pyproject.toml").read_text(encoding="utf-8")
-
-
 # ---------- the viewer's text box ----------
 
 @pytest.mark.parametrize("text, name, company, event, note", [

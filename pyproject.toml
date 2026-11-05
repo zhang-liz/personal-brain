@@ -15,7 +15,8 @@ authors = [{ name = "Liz Zhang" }]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "Operating System :: OS Independent",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -30,7 +31,6 @@ dependencies = [
     "igraph==1.0.0",
     "mcp>=2.3,<3",
     "redis",
-    "tzdata; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]

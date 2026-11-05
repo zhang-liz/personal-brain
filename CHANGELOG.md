@@ -22,7 +22,7 @@ Fixed:
 - The viewer's text box reads `Dr. Jonas` and `Node.js` correctly.
 
 - One odd row or file no longer stops `load`: a line separator in a title, a blank date, a short row, a byte order mark, old bytes, an empty `Profile.csv`, or a job with no month. A person with no date stays in the graph.
-- `load --sample` works with no time zone data. Windows now installs `tzdata`.
+- `load --sample` works with no time zone data.
 - The MCP server recovers when the graph goes while it runs, for example after a restart with no volume. Before, each tool returned `Invalid graph operation on empty key` until you restarted it.
 - A broken `my_brain.json` stops only `load`, and `load` says which file. Before, it stopped every command, the MCP server too.
 - `.env` takes quotes, `export`, spaces and a comment after the URL. A bad `FALKORDB_URL` gets a clear message that does not show the URL.

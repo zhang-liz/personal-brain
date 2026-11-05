@@ -1,4 +1,4 @@
-"""What must work on any system, with no database: Windows CI runs this, because its runners cannot run FalkorDB.
+"""What must work with no database.
 
     .venv/bin/python tests/test_no_database.py
 """
