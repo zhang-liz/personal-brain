@@ -1,6 +1,6 @@
 """Build the public demo site into data/demo_site/. Local FalkorDB only, never Cloud.
 
-    docker run -d --name pb-demo -p 6379:6379 falkordb/falkordb:latest
+    docker run -d --name pb-demo -p 6379:6379 falkordb/falkordb:v4.22.2
     .venv/bin/python scripts/build_demo.py               # full size
     .venv/bin/python scripts/build_demo.py --people 1000 # quick test
 """

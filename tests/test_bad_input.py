@@ -418,6 +418,16 @@ def test_a_reply_is_one_compact_block(tools):
     assert len(content) == 1 and "\n" not in content[0]["text"] and json.loads(content[0]["text"])["found"] == 2
 
 
+def test_find_shows_each_person_their_own_company(tools):
+    """FalkorDB 6 mixed up people when it grouped what a full-text search returned."""
+    for number in range(6):
+        tools.call("remember", name=f"Jonas Number{number}", new_person=True, company=f"Kestrel Works{number}", follow_up=f"Call {number}")
+    for match in tools.call("find", name="Jonas", label="Person")["matches"]:
+        number = match["name"][-1]
+        assert match["works_at"] == [f"Kestrel Works{number}"] and match["follow_ups"][0]["text"] == f"Call {number}"
+    assert tools.call("find", name="Kestrel Works3", label="Company")["matches"][0]["people_you_know_there"] == 1
+
+
 def test_find_says_when_it_shows_only_some(tools):
     for number in range(12):
         tools.call("remember", name=f"Jonas Number{number}", new_person=True)

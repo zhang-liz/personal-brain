@@ -9,7 +9,7 @@ You need Python 3.10 or newer, [uv](https://docs.astral.sh/uv/getting-started/in
 ```bash
 git clone https://github.com/zhang-liz/personal-brain && cd personal-brain
 python3 -m venv .venv && .venv/bin/pip install -e ".[test]"
-docker run -d --rm --name pb-test-db -p 127.0.0.1:6379:6379 falkordb/falkordb:latest
+docker run -d --rm --name pb-test-db -p 127.0.0.1:6379:6379 falkordb/falkordb:v4.22.2
 ```
 
 ## Test

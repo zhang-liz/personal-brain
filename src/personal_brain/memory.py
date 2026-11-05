@@ -87,17 +87,19 @@ def search_query(text):
 
 
 # What to show next to each match, so the agent (and you) can tell two Jonases apart.
+# Small separate queries on purpose. FalkorDB 6 returns wrong rows, or none, when one query goes on from a search result,
+# has a second OPTIONAL MATCH after a collect, or has a pattern comprehension with an edge property.
 FIND = {
-    "Person": "OPTIONAL MATCH (node)-[:WORKED_AT {current: true}]->(c:Company) "
-              "WITH node, score, collect(c.name) AS now "
-              "OPTIONAL MATCH (f:FollowUp {open: true})-[:FOR]->(node) "
-              "WITH node, score, now, collect(CASE WHEN f IS NULL THEN NULL ELSE {id: f.id, text: f.text, due: f.due} END) AS todo "
-              "RETURN node.id, node.name, score, {headline: node.headline, works_at: now, connected_on: node.connected_on,"
-              " title: node.title, location: node.location, email: node.email, last_message: node.last_message, follow_ups: todo}",
+    "Person": "RETURN node.id, {headline: node.headline, connected_on: node.connected_on, title: node.title,"
+              " location: node.location, email: node.email, last_message: node.last_message}",
     "Company": "OPTIONAL MATCH (node)<-[:WORKED_AT {current: true}]-(p:Person) "
-               "WITH node, score, count(p) AS people "
-               "RETURN node.id, node.name, score, {people_you_know_there: people, funding: node.funding}",
-    "Event": "RETURN node.id, node.name, score, {date: node.date, upcoming: node.upcoming}",
+               "WITH node, count(p) AS people "
+               "RETURN node.id, {people_you_know_there: people, funding: node.funding}",
+    "Event": "RETURN node.id, {date: node.date, upcoming: node.upcoming}",
+}
+FIND_LISTS = {
+    "works_at": "MATCH (node:Person)-[:WORKED_AT {current: true}]->(c:Company) WHERE node.id IN $ids RETURN node.id, collect(c.name)",
+    "follow_ups": "MATCH (f:FollowUp {open: true})-[:FOR]->(node:Person) WHERE node.id IN $ids RETURN node.id, collect({id: f.id, text: f.text, due: f.due})",
 }
 
 
@@ -111,9 +113,14 @@ def find(g, text, label=None, limit=10):
     out = []
     for lab in [label] if label else list(FIND):
         rows = g.ro_query("CALL db.idx.fulltext.queryNodes($label, $q) YIELD node, score "
-                          f"{FIND[lab]} ORDER BY score DESC LIMIT {int(limit)}", {"label": lab, "q": query}).result_set
+                          f"RETURN node.id, node.name, score ORDER BY score DESC LIMIT {int(limit)}", {"label": lab, "q": query}).result_set
+        ids = {"ids": [row[0] for row in rows]}
+        details = dict(g.ro_query(f"MATCH (node:{lab}) WHERE node.id IN $ids {FIND[lab]}", ids).result_set) if rows else {}
+        for field, cypher in FIND_LISTS.items() if lab == "Person" and rows else ():
+            for i, values in g.ro_query(cypher, ids).result_set:
+                details[i][field] = values
         out += [{"label": lab, "id": i, "name": name, "score": round(score, 2),
-                 **{k: v for k, v in detail.items() if v not in (None, "", [])}} for i, name, score, detail in rows]
+                 **{k: v for k, v in details.get(i, {}).items() if v not in (None, "", [])}} for i, name, score in rows]
     return sorted(out, key=lambda m: -m["score"])[:limit]
 
 

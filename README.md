@@ -34,7 +34,7 @@ The made-up sample network has 241 invented people, startups and events, in the 
 **1. Start FalkorDB.** Run it in Docker, or see [FalkorDB Cloud](#falkordb-cloud):
 
 ```bash
-docker run -p 6379:6379 -p 3000:3000 -v falkordb_data:/var/lib/falkordb/data -it --rm falkordb/falkordb:latest
+docker run -p 6379:6379 -p 3000:3000 -v falkordb_data:/var/lib/falkordb/data -it --rm falkordb/falkordb:v4.22.2
 ```
 
 **2. Load the sample, and add the server to Claude Code:**
@@ -180,7 +180,7 @@ You need Python 3.10 or newer, [uv](https://docs.astral.sh/uv/getting-started/in
 ```bash
 git clone https://github.com/zhang-liz/personal-brain && cd personal-brain
 python3 -m venv .venv && .venv/bin/pip install -e ".[test]"
-docker run -p 6379:6379 -p 3000:3000 -v falkordb_data:/var/lib/falkordb/data -it --rm falkordb/falkordb:latest
+docker run -p 6379:6379 -p 3000:3000 -v falkordb_data:/var/lib/falkordb/data -it --rm falkordb/falkordb:v4.22.2
 ```
 
 Then, in another terminal, run the tests. They use throwaway graphs:

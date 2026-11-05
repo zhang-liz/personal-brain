@@ -6,6 +6,9 @@ Security:
 - `ask` refuses `LOAD CSV`. FalkorDB allows it in a read-only query, so a query could send anything in your graph to any `https://` server, and a hidden instruction in a headline could ask an agent to do that.
 
 Fixed:
+- `load` and every tool work on FalkorDB 6, the image `falkordb/falkordb:latest` moved to on 2026-11-05. Before, `load` stopped with `Received 2 arguments to procedure 'db.idx.fulltext.createNodeIndex'`.
+- `find` shows the right company and follow-ups on FalkorDB 6.
+- The start commands now name `falkordb/falkordb:v4.22.2`, because FalkorDB 6 can return wrong or empty rows for some queries that an agent may write in `ask`.
 - A tool's error is marked with `isError`, as the MCP spec asks. Before, a client saw every error as a success.
 - `ask` no longer says `row_count: 10000` when it cuts a longer result, because 10,000 is only where FalkorDB stops. It says the total is unknown and to use `count()`.
 - `ask` stops at 40,000 characters. Before, one query could return 170,000 characters, which is more than Claude Code accepts, so the agent got nothing.
