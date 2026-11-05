@@ -7,14 +7,14 @@ Fixed:
 - `load --sample` asks before it replaces a real network. `--yes` does not ask.
 - `load` picks the newest LinkedIn export by the date in the folder name. Before, an older export could win. It prints which one it reads.
 - Two notes that differ only in punctuation are two notes. Before, "Loves C#" after "Loves C++" returned `already_saved` and was lost.
-- `ended_jobs` without a new company is an error. Before, it said `saved`, ended nothing and recorded a meeting.
+- `ended_jobs` with no new company ends the job, with no meeting, and `forget` brings it back. Before, it said `saved`, ended nothing and recorded a meeting.
 - `forget person` writes the keep-out list before it deletes, so someone cannot come back after a delete that stopped.
 - A second session no longer deletes a note that another session is saving. Before, about 3 notes in 10 were lost when saves overlapped, and the reply still said "saved".
 - A rebuild that stopped halfway no longer overwrites newer notes, or brings back a forgotten person. A rebuild now stops if the backup belongs to another graph.
 - After a rebuild, `forget` brings back what the new import says, not an old or empty value.
 - A rebuild changes only a current job: a past role at the same company keeps its title and its end. A job the import ended stays ended. A new spelling of a company is one job, not two.
 - `Kestrel Capital` is no longer the same company as `Kestrel`, and `Kestrel Motion` is not `Kestrel Notion`. Only common last words such as `Labs` and `Inc` can differ. `remember` says when it treats a name as the same job.
-- `forget` with several notes: the right company comes back, a title on one job stays off the others, a job or topic that another note also has stays, and a person from a note goes with their last note.
+- `forget` with several notes: the right company comes back in every order, a title on one job stays off the others, a job or topic that another note also has stays, and a person from a note goes with their last note.
 - `remember` saves the same words again on the same day when the fact has changed since: an email back to its old value, a follow-up asked again after it was done, a return to an old job.
 - A save that stops at the location step keeps the person's city. A save that stops at a job change cannot leave two current jobs.
 - A person from a note whom you forgot stays out of later imports, unless the graph had someone else with that name. `load` says who it left out.
@@ -30,7 +30,8 @@ Fixed:
 - `forget` keeps terminal control characters out of what it prints, so hidden codes in a note cannot change the question.
 - Sample events stay in the future, and the founders story looks back one year, so the demo does not go empty with time.
 - `view` says when its port is in use, and Ctrl-C stops any command with no traceback. `--graph` with no name says what to do.
-- The viewer says when its map has no room for new nodes, and refuses text over 500 characters instead of cutting it.
+- The viewer makes room for everything saved since the export. Before, new nodes past 500 ids did not show. It refuses text over 500 characters instead of cutting it.
+- `find` with `about`, `forget all-notes` and the viewer's live updates read past FalkorDB's 10,000 row limit.
 - The viewer's text box reads `J. Lind` and `St. John` as names.
 
 Changed:

@@ -7,7 +7,7 @@ new graph. If a rebuild stops halfway, the next one finds them in that file.
 
 import json
 
-from personal_brain.companies import same_company
+from personal_brain.companies import norm, same_company
 from personal_brain.paths import HOME
 
 BACKUP = HOME / "data" / "notes-backup.json"
@@ -16,15 +16,30 @@ ONE_PER_PAIR = {"INTO", "ATTENDED", "KNOWS"}   # when the import already has thi
 PAGE = 5000    # rows per page when the backup reads the graph
 
 
-def every_row(graph, match, columns):
+def every_row(graph, match, columns, params=None, timeout=None):
     """All rows of a query, in pages: a result holds at most 10,000 rows, and the rest would be lost with no error.
 
     `match` ends with a WHERE that names the place of each row as `at`."""
     rows, last = [], -1
-    while page := graph.ro_query(f"{match} AND at > $last RETURN {columns}, at ORDER BY at LIMIT {PAGE}", {"last": last}).result_set:
+    while page := graph.ro_query(f"{match} AND at > $last RETURN {columns}, at ORDER BY at LIMIT {PAGE}",
+                                 {**(params or {}), "last": last}, timeout=timeout).result_set:
         rows += [row[:-1] for row in page]
         last = page[-1][-1]
     return rows
+
+
+def sync_company(graph, pid, only_with_jobs=False):
+    """A person's company follows their jobs: it stays if it is still a current job, else it is another current job, else empty.
+
+    only_with_jobs: with no current job, leave it. The import can name a company with no job link, such as "Stealth"."""
+    rows = graph.ro_query("MATCH (p:Person {id: $id}) OPTIONAL MATCH (p)-[:WORKED_AT {current: true}]->(c:Company)"
+                          " RETURN p.company, collect(c.name)", {"id": pid}).result_set
+    if not rows or (only_with_jobs and not rows[0][1]):
+        return
+    company, jobs = rows[0]
+    if not any(same_company(norm(job), norm(company)) for job in jobs):
+        graph.query("MATCH (p:Person {id: $id}) SET p.company = $company, p.headline = CASE WHEN p.source = 'agent' THEN $company ELSE p.headline END",
+                    {"id": pid, "company": jobs[0] if jobs else ""})
 
 
 def snapshot(graph):
@@ -232,4 +247,6 @@ def restore(graph, snap):
             undo["prev_company"] = facts[3] or ""
         if undo:
             graph.query("MATCH (n:Note {id: $id}) SET n += $undo", {"id": a["note"], "undo": undo})
+        if note.get("ended_only"):
+            sync_company(graph, pid)
     return sum(n["label"] == "Note" for n in snap["nodes"]), len(merged)

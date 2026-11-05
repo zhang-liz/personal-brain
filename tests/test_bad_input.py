@@ -297,3 +297,19 @@ def test_windows_gets_time_zone_data():
 ])
 def test_initials_and_st_stay_in_the_name(text, name, company, event, note):
     assert memory.parse_met(text) == {"name": name, "company": company, "event": event, "note": note}
+
+
+def test_live_updates_read_past_the_row_limit(folder, viewer):
+    g = memory.connect(GRAPH)[0]
+    for i in range(8):
+        memory.remember(g, f"Live Person{i}", new_person=True, note=f"note {i}")
+    read = lambda: json.load(urllib.request.urlopen("http://127.0.0.1:8765/api/delta?since=0", timeout=10))
+    whole = read()
+    db = memory.FalkorDB().connection
+    size = db.execute_command("GRAPH.CONFIG", "GET", "RESULTSET_SIZE")[1]
+    db.execute_command("GRAPH.CONFIG", "SET", "RESULTSET_SIZE", 3)
+    try:
+        capped = read()
+    finally:
+        db.execute_command("GRAPH.CONFIG", "SET", "RESULTSET_SIZE", size)
+    assert len(capped["nodes"]) == len(whole["nodes"]) > 8 and len(capped["edges"]) == len(whole["edges"]) > 8

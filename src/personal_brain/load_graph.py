@@ -31,6 +31,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from falkordb import FalkorDB
 
 from personal_brain import job_changes, notes_backup
+from personal_brain.companies import norm
 from personal_brain.paths import HOME, PACKAGE, cloud_url, open_url, printable
 SAMPLE = "--sample" in sys.argv
 SAMPLE_DIR = Path(os.environ.get("PB_SAMPLE_DIR", PACKAGE / "sample_data"))
@@ -63,12 +64,6 @@ def forgotten_list(path=FORGOTTEN):
         return set(json.loads(path.read_text(encoding="utf-8"))) if path.exists() else set()
     except (ValueError, TypeError) as e:
         sys.exit(f"Cannot read {path}: {e}. It lists the people you forgot. Fix the file, then try again.")
-
-
-def norm(text):
-    """Lowercase words in any script, without punctuation: "Kestrel, Inc." -> "kestrel inc", "三星" -> "三星"."""
-    kept = "".join(c if unicodedata.category(c)[0] in "LMN" else " " for c in (text or "").lower())
-    return " ".join(kept.split())
 
 
 def without_accents(text):
