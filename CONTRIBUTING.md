@@ -8,21 +8,17 @@ You need Python 3.10 or newer, [uv](https://docs.astral.sh/uv/getting-started/in
 
 ```bash
 git clone https://github.com/zhang-liz/personal-brain && cd personal-brain
-python3 -m venv .venv && .venv/bin/pip install -e .
+python3 -m venv .venv && .venv/bin/pip install -e ".[test]"
 docker run -d --rm --name pb-test-db -p 127.0.0.1:6379:6379 falkordb/falkordb:latest
 ```
 
 ## Test
 
-Run these before you open a pull request. They use throwaway graphs. Set `FALKORDB_URL=` so that they use your local database, even if your `.env` names a Cloud one.
+Run these before you open a pull request. They use throwaway graphs on your local database, even if your `.env` names a Cloud one.
 
 ```bash
-export FALKORDB_URL=
 uvx ruff check src tests scripts
-.venv/bin/python tests/test_memory.py
-.venv/bin/python tests/test_no_database.py
-.venv/bin/python tests/test_mcp_server.py
-PATH="$PWD/.venv/bin:$PATH" .venv/bin/python tests/test_package.py
+PATH="$PWD/.venv/bin:$PATH" .venv/bin/python -m pytest
 ```
 
 Add a test for each fix or feature. Make sure that it fails without your change.

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.1 (2026-11-04)
+
+Changed:
+- The package description and README now say first that this is an MCP server.
+- Listed in the official MCP Registry as `io.github.zhang-liz/personal-brain`.
+- `falkordb` 1.8.1 and `igraph` 1.0.0.
+- The tests run with pytest.
+
 ## 0.3.0 (2026-11-04)
 
 Added:

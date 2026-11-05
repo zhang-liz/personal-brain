@@ -16,6 +16,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
 PROJECT = Path(__file__).resolve().parent.parent
 TEST_GRAPH = "pb_memory_test"
 REBUILD_HOME = tempfile.mkdtemp()   # keeps the real data folder out of rebuild tests
@@ -25,10 +27,10 @@ from personal_brain import memory  # noqa: E402
 def check(ok, what):
     print(("ok   " if ok else "FAIL ") + what)
     if not ok:
-        raise SystemExit(1)
+        raise AssertionError(what)
 
 
-def main():
+def load_test_graph():
     cloud = ["--cloud"] if "--cloud" in sys.argv else []
     subprocess.run([sys.executable, "-m", "personal_brain.load_graph", "--sample", "--graph", TEST_GRAPH,
                     "--force", *cloud], check=True, capture_output=True)
@@ -37,10 +39,14 @@ def main():
     g, where = memory.connect(TEST_GRAPH)
     memory.FORGOTTEN = Path(tempfile.mkdtemp()) / "forgotten.json"   # keep the real list clean
     print(f"graph {TEST_GRAPH} on {where}")
-    try:
-        run(g)
-    finally:
-        g.delete()
+    return g
+
+
+@pytest.fixture(scope="module")
+def g():
+    graph = load_test_graph()
+    yield graph
+    graph.delete()
 
 
 def run_names(g):
@@ -719,26 +725,7 @@ def run_job_ends(g):
           "setup keeps real end dates")
 
 
-def run(g):
-    run_graph_from_environment(g)
-    run_open_client(g)    # first: only the first rebuild of a new graph renumbers the fields
-    run_merge_on_import(g)
-    run_rebuild(g)
-    run_job_changes(g)
-    run_last_message(g)
-    run_follow_ups(g)
-    run_company_names(g)
-    run_event_names(g)
-    run_coworkers(g)
-    run_facts(g)
-    run_job_ends(g)
-    run_names(g)
-    run_about(g)
-    run_forget(g)
-    run_dates(g)
-    run_half_saved(g)
-    run_repeats(g)
-    run_jobs(g)
+def run_whole_flow(g):
     memory.setup(g)
     memory.setup(g)
     check(True, "setup runs twice")
@@ -814,5 +801,40 @@ def run(g):
           g.ro_query("MATCH (n:Note) RETURN count(n)").result_set[0][0] == 0, "reset removes every note")
 
 
+# In order: each step uses the same graph, and some leave data for the next ones.
+STEPS = [
+    run_graph_from_environment,
+    run_open_client,    # first: only the first rebuild of a new graph renumbers the fields
+    run_merge_on_import,
+    run_rebuild,
+    run_job_changes,
+    run_last_message,
+    run_follow_ups,
+    run_company_names,
+    run_event_names,
+    run_coworkers,
+    run_facts,
+    run_job_ends,
+    run_names,
+    run_about,
+    run_forget,
+    run_dates,
+    run_half_saved,
+    run_repeats,
+    run_jobs,
+    run_whole_flow,
+]
+
+
+@pytest.mark.parametrize("step", STEPS, ids=lambda step: step.__name__.removeprefix("run_"))
+def test_memory(g, step):
+    step(g)
+
+
 if __name__ == "__main__":
-    main()
+    graph = load_test_graph()
+    try:
+        for step in STEPS:
+            step(graph)
+    finally:
+        graph.delete()

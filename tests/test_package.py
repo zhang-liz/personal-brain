@@ -23,7 +23,7 @@ PROJECT = Path(__file__).resolve().parent.parent
 TEST_GRAPH = "pb_package_test"
 
 
-def main():
+def test_built_package():
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         subprocess.run(["uv", "build", "--wheel", "--out-dir", str(tmp / "dist"), str(PROJECT)], check=True, capture_output=True)
@@ -51,6 +51,10 @@ def main():
 
         readme = (PROJECT / "README.md").read_text(encoding="utf-8")
         check(readme.split("\n")[2].startswith("**An MCP server"), "the README says first that this is an MCP server")
+        listing = json.loads((PROJECT / "server.json").read_text(encoding="utf-8"))
+        check(f"mcp-name: {listing['name']}" in readme, "the README has the line the MCP Registry looks for")
+        check(listing["version"] == __version__ and listing["packages"][0]["version"] == __version__, "server.json has this version")
+        check(len(listing["description"]) <= 100, "the MCP Registry takes this description")
         check('description = "MCP server' in (PROJECT / "pyproject.toml").read_text(encoding="utf-8"), "the package description says first that this is an MCP server")
         check(not [l for l in readme.splitlines() if "docker run" in l and "falkordb_data:/var/lib/falkordb/data" not in l], "every start command in the README keeps data in a volume")
         check(run("--version").stdout.strip().endswith(__version__), "--version works")
@@ -301,4 +305,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    test_built_package()

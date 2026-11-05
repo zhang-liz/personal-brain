@@ -29,6 +29,9 @@ dependencies = [
     "redis",
 ]
 
+[project.optional-dependencies]
+test = ["pytest"]
+
 [project.urls]
 Homepage = "https://github.com/zhang-liz/personal-brain"
 Demo = "https://zhang-liz.github.io/personal-brain/"
@@ -37,6 +40,9 @@ Changelog = "https://github.com/zhang-liz/personal-brain/blob/main/CHANGELOG.md"
 
 [project.scripts]
 personal-brain = "personal_brain.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 140
