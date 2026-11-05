@@ -1,4 +1,4 @@
-name: Test
+name: Test (docs only)
 
 # The tests skip a pull request that changes only docs, but `main` requires the check "test (3.10)".
 # This gives such a pull request that check in a few seconds, so that it can merge.

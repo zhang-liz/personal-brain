@@ -11,22 +11,25 @@ import hashlib
 import json
 import os
 import re
+import time
 import uuid
 from datetime import date
 
 from falkordb import FalkorDB, Edge, Node, Path as GraphPath
 
-from personal_brain.companies import core, one_edit, same_company
+from personal_brain.companies import core, one_edit, same_company, typo
 from personal_brain.load_graph import EVENT_ROLE_RE, FORGOTTEN, TOPIC_RE, city_of, create_search_indexes, fold, norm
 
 from personal_brain.paths import env_file_url
 MAX_ROWS = 50        # rows ask() hands back to the agent
 TIMEOUT_MS = 5000    # longest an ask() query may run
+SAVE_TIME_LIMIT_S = 300    # a note still saving after this long stopped halfway
+LOST_SAVES = set()         # saves in this process that failed and could not clean up, because the connection was down
 
 FIELDS = ("title", "location", "email")    # facts remember can set or correct on a person
 
 SCHEMA = """Nodes: Me (you), Person, Company, School, Skill, Topic, Event, Investor, City, Note, FollowUp.
-Every node but Note and FollowUp has id and name. Person: headline, title, company, location, email, connected_on, messages,
+Every node has id. Every node but Note and FollowUp has name. Person: headline, title, company, location, email, connected_on, messages,
 last_message (the day of your last LinkedIn message, for "who did I lose touch with": sort it, and people with none never wrote).
 Company: well_funded, funding, employees. Event: date, upcoming, summary, url.
 Edges:
@@ -202,14 +205,30 @@ def repeat_key(company, event, text, day, fields):
 
 
 def saved_before(g, key, person, company, event, note):
-    """The note this same call saved before, as (note id, person id, person name), or None."""
+    """The notes this same call saved before, as (note id, person id, person name)."""
     ids = [person["id"]]
     if person["new"] and (company or event or note):
         # A retry with new_person=true looks for a person it may have just made.
         ids = [m["id"] for m in find(g, person["name"], "Person", 20) if fold(m["name"]) == fold(person["name"])]
-    rows = g.ro_query("MATCH (n:Note {key: $key})-[:ABOUT]->(p:Person) WHERE p.id IN $ids RETURN n.id, p.id, p.name LIMIT 1",
+    return g.ro_query("MATCH (n:Note {key: $key})-[:ABOUT]->(p:Person) WHERE p.id IN $ids RETURN n.id, p.id, p.name",
                       {"key": key, "ids": ids}).result_set
-    return rows[0] if rows else None
+
+
+def still_true(g, nid, pid, fields, company, follow_up):
+    """A retry changes nothing. If what the earlier note said has changed since, the same words are news."""
+    if fields:
+        now = g.ro_query("MATCH (p:Person {id: $pid}) RETURN " + ", ".join(f"p.{f}" for f in fields), {"pid": pid}).result_set[0]
+        if list(now) != list(fields.values()):
+            return False
+    if company:
+        jobs = g.ro_query("MATCH (:Person {id: $pid})-[:WORKED_AT {current: true}]->(c:Company) RETURN c.id", {"pid": pid}).result_set
+        if not any(same_company(c, norm(company) or company) for (c,) in jobs):
+            return False
+    if follow_up:
+        rows = g.ro_query("MATCH (f:FollowUp {note: $nid}) RETURN f.open", {"nid": nid}).result_set
+        if not (rows and rows[0][0]):
+            return False
+    return True
 
 
 def jobs_that_ended(now, ended_jobs, name):
@@ -228,7 +247,7 @@ def same_event(a, b):
     """Same event give or take "and" and "&", case, accents and 1 typo per word of 4+ letters. A year must match exactly."""
     wa, wb = event_words(a), event_words(b)
     return len(wa) == len(wb) and all(
-        x == y or (min(len(x), len(y)) >= 4 and not any(c.isdigit() for c in x + y) and one_edit(x, y)) for x, y in zip(wa, wb))
+        x == y or (min(len(x), len(y)) >= 4 and not any(c.isdigit() for c in x + y) and typo(x, y)) for x, y in zip(wa, wb))
 
 
 def event_words(name):
@@ -238,22 +257,26 @@ def event_words(name):
 def set_fields(q, fields, company_id, now):
     """Title, city and email go on the person. Each note keeps what it replaced, so forgetting it brings that back."""
     for field, value in fields.items():
+        # First the undo, then the change: a save that stops at any step can still be undone.
+        q(f"MATCH (n:Note {{id: $nid}}), (p:Person {{id: $pid}})"
+          f" SET n.prev_{field} = coalesce(p.{field}, ''), n.prev_{field}_note = coalesce(p.{field}_note, ''), n.set_{field} = true")
         if field == "location":
-            cities = [c for (c,) in q("MATCH (:Person {id: $pid})-[:LIVES_IN]->(c:City) RETURN c.id")]
-            q("MATCH (n:Note {id: $nid}) SET n.prev_cities = $cities", cities=cities)
+            cities = q("MATCH (:Person {id: $pid})-[:LIVES_IN]->(c:City) RETURN c.id, c.name")
+            q("MATCH (n:Note {id: $nid}) SET n.prev_cities = $ids, n.prev_city_names = $names",
+              ids=[c for c, _ in cities], names=[n for _, n in cities])
             q("MATCH (:Person {id: $pid})-[r:LIVES_IN]->() DELETE r")
             city = city_of(value, ())
             if city:
                 q("MERGE (c:City {id: $cid}) ON CREATE SET c.name = $city, c.source = 'agent', c.note = $nid"
                   " WITH c MATCH (p:Person {id: $pid}) CREATE (p)-[:LIVES_IN {note: $nid}]->(c)", cid=norm(city), city=city)
-        q(f"MATCH (n:Note {{id: $nid}}), (p:Person {{id: $pid}})"
-          f" SET n.prev_{field} = coalesce(p.{field}, ''), n.prev_{field}_note = coalesce(p.{field}_note, ''),"
-          f" n.set_{field} = true, p.{field} = $value, p.{field}_note = $nid", value=value)
+        q(f"MATCH (p:Person {{id: $pid}}) SET p.{field} = $value, p.{field}_note = $nid", value=value)
     job = company_id or (now[0][0] if len(now) == 1 else "")
     if "title" in fields and job:
         q("MATCH (:Person {id: $pid})-[w:WORKED_AT {current: true}]->(:Company {id: $job})"
           " SET w.prev_title = CASE WHEN w.title_note IS NULL THEN coalesce(w.title, '') ELSE w.prev_title END,"
-          " w.title = $title, w.title_note = $nid", job=job, title=fields["title"])
+          " w.title_log = CASE WHEN w.title_log IS NULL AND w.title_note IS NOT NULL THEN [w.title_note, w.title]"
+          " ELSE coalesce(w.title_log, []) END + [$nid, $title], w.title = $title, w.title_note = $nid",
+          job=job, title=fields["title"])
 
 
 def undo_fields(g, nid, note, pid):
@@ -265,19 +288,34 @@ def undo_fields(g, nid, note, pid):
         later = g.ro_query(f"MATCH (m:Note {{prev_{field}_note: $nid}}) RETURN m.id", {"nid": nid}).result_set
         if later:
             g.query(f"MATCH (m:Note {{id: $later}}) SET m.prev_{field} = $before, m.prev_{field}_note = $before_note"
-                    + (", m.prev_cities = $cities" if field == "location" else ""),
-                    {"later": later[0][0], "before": before, "before_note": before_note, "cities": note.get("prev_cities", [])})
+                    + (", m.prev_cities = $cities, m.prev_city_names = $names" if field == "location" else ""),
+                    {"later": later[0][0], "before": before, "before_note": before_note, "cities": note.get("prev_cities", []),
+                     "names": note.get("prev_city_names", [])})
             continue
         g.query(f"MATCH (p:Person {{id: $pid}}) SET p.{field} = $before, p.{field}_note = $before_note",
                 {"pid": pid, "before": before or None, "before_note": before_note or None})
         if field == "location":
-            g.query("MATCH (p:Person {id: $pid}), (c:City) WHERE c.id IN $cities CREATE (p)-[r:LIVES_IN]->(c)"
-                    " SET r.note = $before_note",
-                    {"pid": pid, "cities": note.get("prev_cities", []), "before_note": before_note or None})
-    g.query("MATCH (p:Person)-[w:WORKED_AT {title_note: $nid}]->()"
-            " SET w.title = CASE WHEN p.title_note IS NULL THEN w.prev_title ELSE p.title END,"
-            " w.prev_title = CASE WHEN p.title_note IS NULL THEN NULL ELSE w.prev_title END,"
-            " w.title_note = p.title_note", {"nid": nid})
+            # The city may have gone with another person's note. MERGE: a save that stopped early still has the old link.
+            ids, names = note.get("prev_cities", []), note.get("prev_city_names", [])
+            cities = [{"id": c, "name": names[i] if i < len(names) else c} for i, c in enumerate(ids)]
+            g.query("UNWIND $cities AS city MERGE (c:City {id: city.id})"
+                    " ON CREATE SET c.name = city.name, c.source = 'agent', c.note = $before_note"
+                    " WITH c MATCH (p:Person {id: $pid}) MERGE (p)-[r:LIVES_IN]->(c) SET r.note = $before_note",
+                    {"pid": pid, "cities": cities, "before_note": before_note or None})
+    # Each job keeps its own list of titles from notes, so a note goes from the middle of it with no effect on other jobs.
+    for edge, log, first, title_now, note_now in g.ro_query(
+            "MATCH (p:Person {id: $pid})-[w:WORKED_AT]->() WHERE w.title_note = $nid OR $nid IN coalesce(w.title_log, [])"
+            " RETURN id(w), w.title_log, w.prev_title, p.title, p.title_note", {"pid": pid, "nid": nid}).result_set:
+        if log is None:    # from 0.3.1, which kept no list: the job follows the person
+            title, title_note = (title_now, note_now) if note_now else (first or None, None)
+            log = [title_note, title] if note_now else []
+        else:
+            at = log.index(nid) if nid in log else None
+            log = log if at is None else log[:at] + log[at + 2:]
+            title, title_note = (log[-1], log[-2]) if log else (first or None, None)
+        g.query("MATCH ()-[w]->() WHERE id(w) = $edge"
+                " SET w.title = $title, w.title_note = $note, w.title_log = $log, w.prev_title = $first",
+                {"edge": edge, "title": title, "note": title_note, "log": log or None, "first": first if log else None})
 
 
 def due_date(due, follow_up):
@@ -289,6 +327,20 @@ def due_date(due, follow_up):
         return date.fromisoformat(due).isoformat()
     except (TypeError, ValueError):
         raise ValueError(f"due must be a date like 2026-11-04, not {due}.") from None
+
+
+def clean_half_saved(g):
+    """A save that stopped halfway, when the connection dropped, must not confuse this one.
+
+    Another session may be saving right now, so only a save this process lost, or an old one, is half-saved."""
+    now = time.time()
+    for nid, since in g.ro_query("MATCH (n:Note) WHERE n.saving IS NOT NULL RETURN n.id, n.saving").result_set:
+        if nid in LOST_SAVES or since is True or now - since > SAVE_TIME_LIMIT_S:
+            try:
+                forget_note(g, nid)
+            except ValueError:
+                pass    # another session cleaned it first
+            LOST_SAVES.discard(nid)
 
 
 def remember(g, name, company="", event="", note="", person_id="", new_person=False, on="", ended_jobs=None,
@@ -309,9 +361,7 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
     fields = {f: v for f, v in zip(FIELDS, (title, location, email)) if v}
     met = bool(note or event or company) or not (fields or follow_up or done)    # a correction or a to-do is not a meeting
     day = meeting_date(on)
-    # A save that stopped halfway, when the connection dropped, must not confuse this one.
-    for (half_saved,) in g.ro_query("MATCH (n:Note {saving: true}) RETURN n.id").result_set:
-        forget_note(g, half_saved)
+    clean_half_saved(g)
     person, candidates = resolve(g, name, company, person_id, new_person)
     if person is None:
         return {"status": "needs_choice", "candidates": candidates,
@@ -325,7 +375,8 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
                                      f"Follow up: {follow_up}" if follow_up else "", f"Done: {done[1]}" if done else ""] if x)
     extra = {**fields, "follow_up": follow_up, "due": due or "", "done": follow_up_done}
     key = repeat_key(company, event, text, day, {k: v for k, v in extra.items() if v})
-    before = saved_before(g, key, person, company, event, note or fields or follow_up)
+    before = next((b for b in saved_before(g, key, person, company, event, note or fields or follow_up)
+                   if still_true(g, b[0], b[1], fields, company, follow_up)), None)
     if before:
         return {"status": "already_saved", "note_id": before[0], "person": {"id": before[1], "name": before[2], "new": False},
                 "changes": [], "ms": 0.0, "undo": f"personal-brain forget note {before[0]}"}
@@ -342,8 +393,9 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
         known = [] if same_job else [(m["id"], m["name"]) for m in find(g, core(said), "Company", 5) if core(norm(m["name"])) == core(said)]
         cid, company = (same_job or known or [(said, company)])[0]
         new_job = not same_job
+        said_other_name = bool(same_job) and core(said) != core(cid)
     else:
-        new_job = False
+        new_job = said_other_name = False
     if new_job and ended_jobs is None and len(now) > 1:
         jobs = [cname for _, cname in now]
         return {"status": "needs_jobs", "person": person, "current_jobs": jobs,
@@ -362,7 +414,7 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
         return r.result_set
 
     def save():
-        q("MATCH (me:Me) CREATE (me)-[:WROTE]->(:Note {id: $nid, text: $text, on: $day, source: 'agent', saving: true})", text=text)
+        q("MATCH (me:Me) CREATE (me)-[:WROTE]->(:Note {id: $nid, text: $text, on: $day, source: 'agent', saving: $since, saved_at: $since})", text=text, since=time.time())
         if person["new"]:
             # The note's text stays on the Note, so forgetting the note removes it. The job step below sets the company.
             q("CREATE (:Person {id: $pid, name: $name, search: $search, company: '', headline: '',"
@@ -377,15 +429,21 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
             q("MERGE (c:Company {id: $cid})"
               " ON CREATE SET c.name = $company, c.search = $search, c.source = 'agent', c.note = $nid",
               cid=cid, company=company, search=fold(company))
+            if said_other_name:
+                changes.append(f"same job as {company}")
+            if not new_job:
+                # This note also says so, so the job stays if the note that started it goes.
+                q("MATCH (:Person {id: $pid})-[w:WORKED_AT {current: true}]->(:Company {id: $cid}), (n:Note {id: $nid})"
+                  " WHERE w.note IS NOT NULL SET n.job_note = w.note", cid=cid)
             if new_job:
                 # A new job: end the old ones instead of deleting them, so the history stays.
                 q("MATCH (p:Person {id: $pid}), (n:Note {id: $nid}) SET n.prev_company = coalesce(p.company, '')")
-                q("MATCH (p:Person {id: $pid})-[w:WORKED_AT {current: true}]->(c:Company) WHERE c.id IN $ended"
-                  " SET w.current = false, w.ended_on = $day, w.ended_by = $nid", ended=ended)
+                # One query, so a save that stops cannot leave the old job ended and the new one missing.
                 q("MATCH (p:Person {id: $pid}), (c:Company {id: $cid})"
                   " CREATE (p)-[:WORKED_AT {current: true, since: $day, source: 'agent', note: $nid}]->(c)"
-                  " SET p.company = $company, p.headline = CASE WHEN p.source = 'agent' THEN $company ELSE p.headline END",
-                  cid=cid, company=company)
+                  " SET p.company = $company, p.headline = CASE WHEN p.source = 'agent' THEN $company ELSE p.headline END"
+                  " WITH p MATCH (p)-[w:WORKED_AT {current: true}]->(old:Company) WHERE old.id IN $ended AND old.id <> $cid"
+                  " SET w.current = false, w.ended_on = $day, w.ended_by = $nid", cid=cid, company=company, ended=ended)
                 names = ", ".join(n for c, n in now if c in ended)
                 changes.append(f"works at {company} now" + (f" (ended: {names})" if names else ""))
                 coworkers = q("MATCH (p:Person {id: $pid}), (o:Person)-[:WORKED_AT {current: true}]->(:Company {id: $cid})"
@@ -432,18 +490,35 @@ def remember(g, name, company="", event="", note="", person_id="", new_person=Fa
         try:
             forget_note(g, nid)
         except Exception:
-            pass    # the connection is still down: the next remember cleans up
+            LOST_SAVES.add(nid)    # the connection is still down: the next remember cleans up
         raise
 
     return {"status": "saved", "note_id": nid, "person": person, "changes": changes, "ms": round(ms, 2),
             **({"follow_up_id": fid} if fid else {}), "undo": f"personal-brain forget note {nid}"}
 
 
+# "met NAME [from COMPANY] [at EVENT][, note]". A dot ends the name only with a space after it, and never after "Dr".
+MET_RE = re.compile(
+    r"^\s*(?:i\s+)?(?:just\s+)?met\s+(?P<name>.+?)"
+    r"(?:\s+(?:from|of)\s+(?P<company>.+?))?"
+    r"(?:\s+(?:at|during)\s+(?P<event>.+?))?"
+    r"\s*(?:(?:(?<!\bdr)(?<!\bmr)(?<!\bms)(?<!\bmrs)(?<!\bprof)\.(?=\s|$)|[;:!]|,|\s[-–—]\s)\s*(?P<note>.*))?$", re.I)
+
+
+def parse_met(text):
+    """The viewer's text box: one line about someone you met, in parts. None if it is not about a meeting."""
+    m = MET_RE.match(text.strip())
+    if not m:
+        return None
+    parts = {k: (v or "").strip(" ") for k, v in m.groupdict().items()}
+    return parts if parts["name"] else None
+
+
 # ---------- ask ----------
 
 def shown(key):
     """Bookkeeping fields stay out of what the agent sees."""
-    return key not in ("search", "key", "saving") and not key.endswith("_note") and not key.startswith(("prev_", "set_"))
+    return key not in ("search", "key", "saving", "saved_at", "job_note", "title_log") and not key.endswith("_note") and not key.startswith(("prev_", "set_"))
 
 
 def plain(v):
@@ -486,15 +561,35 @@ def forget_note(g, nid):
     touched |= {i for (i,) in g.ro_query("MATCH (x {note: $nid}) RETURN id(x)", params).result_set}
     touched |= {i for (i,) in g.ro_query("MATCH (:Note {id: $nid})-[:ABOUT]->(p) RETURN id(p)", params).result_set}
 
-    started = g.ro_query("MATCH ()-[w:WORKED_AT {note: $nid}]->() RETURN w.ended_by", params).result_set
-    if started and started[0][0]:
+    started = g.ro_query("MATCH ()-[w:WORKED_AT {note: $nid}]->(c) RETURN w.ended_by, c.id, c.name", params).result_set
+    ended_by, job, job_name = started[0] if started else (None, None, None)
+    # A later note says this person has this job too, so the job stays and belongs to that note now.
+    also = g.ro_query("MATCH (m:Note {job_note: $nid}) RETURN m.id", params).result_set if started else []
+    if also:
+        keep = {**params, "keep": also[0][0], "job": job}
+        g.query("MATCH (m:Note {job_note: $nid}) SET m.job_note = CASE WHEN m.id = $keep THEN NULL ELSE $keep END", keep)
+        g.query("MATCH ()-[w:WORKED_AT {note: $nid}]->() SET w.note = $keep", keep)
+        g.query("MATCH ()-[k:KNOWS {via: 'coworkers', note: $nid}]->() SET k.note = $keep", keep)
+        g.query("MATCH (c:Company {id: $job, note: $nid}) SET c.note = $keep", keep)
+        g.query("MATCH ()-[w:WORKED_AT {ended_by: $nid}]->() SET w.ended_by = $keep", keep)
+        g.query("MATCH (n:Note {id: $nid}), (m:Note {id: $keep}) SET m.prev_company = coalesce(n.prev_company, '')", keep)
+    elif ended_by:
         # A later note ended the job this note started, so that later note now undoes what this note ended.
-        later = {**params, "later": started[0][0]}
+        later = {**params, "later": ended_by}
         g.query("MATCH (n:Note {id: $nid}), (m:Note {id: $later}) SET m.prev_company = coalesce(n.prev_company, '')", later)
         g.query("MATCH ()-[w:WORKED_AT {ended_by: $nid}]->() SET w.ended_by = $later", later)
     else:
         if started:
-            g.query("MATCH (n:Note {id: $nid})-[:ABOUT]->(p:Person) SET p.company = coalesce(n.prev_company, '')", params)
+            # If a later note moved on from this company, that note now moves on from the one before.
+            next_note = g.ro_query("MATCH (m:Note)-[:ABOUT]->(p:Person) WHERE p.id IN $people AND m.id <> $nid"
+                                   " AND m.prev_company = $name AND p.company <> $name AND coalesce(m.saved_at, 0) >= $at"
+                                   " RETURN m.id ORDER BY coalesce(m.saved_at, 0) LIMIT 1",
+                                   {**params, "people": people, "name": job_name, "at": note.get("saved_at", 0)}).result_set
+            if next_note:
+                g.query("MATCH (n:Note {id: $nid}), (m:Note {id: $later}) SET m.prev_company = coalesce(n.prev_company, '')",
+                        {**params, "later": next_note[0][0]})
+            else:
+                g.query("MATCH (n:Note {id: $nid})-[:ABOUT]->(p:Person) SET p.company = coalesce(n.prev_company, '')", params)
         counts["jobs_reopened"] = g.query("MATCH ()-[w:WORKED_AT {ended_by: $nid}]->()"
                                           " SET w.current = true, w.ended_on = NULL, w.ended_by = NULL"
                                           " RETURN count(w)", params).result_set[0][0]
@@ -503,23 +598,27 @@ def forget_note(g, nid):
             " WITH a, collect(m.note)[0] AS other SET a.note = other", params)
 
     g.query("MATCH (f:FollowUp {done_by: $nid}) SET f.open = true, f.done_on = NULL, f.done_by = NULL", params)
+    lost_topics = [t for (t,) in g.ro_query("MATCH ()-[:INTO {note: $nid}]->(t:Topic) RETURN t.id", params).result_set]
     counts["facts"] = int(g.query("MATCH ()-[r {note: $nid}]->() DELETE r", params).relationships_deleted)
     for pid in people:
         undo_fields(g, nid, note, pid)
     g.query("MATCH (n:Note {id: $nid}) DETACH DELETE n", params)
     for pid in people:
-        rebuild_from_notes(g, pid)
+        rebuild_from_notes(g, pid, lost_topics)
+    # A person from a note goes with their last note, even if a later note linked a coworker to them.
+    g.query("MATCH (p:Person {source: 'agent'}) WHERE id(p) IN $ids AND NOT (:Note)-[:ABOUT]->(p)"
+            " WITH p MATCH (p)-[k:KNOWS {via: 'coworkers'}]-() DELETE k", {"ids": sorted(touched)})
     counts["nodes"] = int(g.query("MATCH (x) WHERE id(x) IN $ids AND x.source = 'agent' OPTIONAL MATCH (x)-[r]-()"
                                   " WITH x, count(r) AS used WHERE used = 0 DELETE x",
                                   {"ids": sorted(touched)}).nodes_deleted)
     return {"forgot": "note", "id": nid, **counts}
 
 
-def rebuild_from_notes(g, pid):
-    """After a note goes: what the person's other notes say stays true. Graphs from older versions kept note text in the headline."""
+def rebuild_from_notes(g, pid, lost_topics):
+    """After a note goes: a topic it took away stays if another note says it too. Graphs from older versions kept note text in the headline."""
     notes = g.ro_query("MATCH (n:Note)-[:ABOUT]->(:Person {id: $pid}) RETURN n.id, n.text", {"pid": pid}).result_set
     for nid, text in notes:
-        for topic in [t for t, rx in TOPIC_RE.items() if rx.search(text)]:
+        for topic in [t for t in lost_topics if TOPIC_RE[t].search(text)]:
             g.query("MATCH (p:Person {id: $pid}), (t:Topic {id: $t}) MERGE (p)-[i:INTO]->(t) ON CREATE SET i.note = $nid",
                     {"pid": pid, "t": topic, "nid": nid})
     g.query("MATCH (p:Person {id: $pid, source: 'agent'}) SET p.headline = coalesce(p.company, ''), p.event_contact = $ec",
@@ -537,7 +636,12 @@ def forget_person(g, pid):
     g.query("MATCH (p:Person {id: $id}) DETACH DELETE p", {"id": pid})
     forgotten = set(json.loads(FORGOTTEN.read_text(encoding="utf-8"))) if FORGOTTEN.exists() else set()
     FORGOTTEN.parent.mkdir(parents=True, exist_ok=True)
-    FORGOTTEN.write_text(json.dumps(sorted(forgotten | {pid}), indent=1), encoding="utf-8")
+    # A person from a note has no LinkedIn id yet, so a later import can only know them by name.
+    # If the graph has someone else with this name, they are another person: only the id goes on the list.
+    namesakes = g.ro_query("MATCH (p:Person {search: $search}) WHERE p.id <> $id RETURN count(p)",
+                           {"search": fold(rows[0][0]), "id": pid}).result_set[0][0]
+    by_name = {"name:" + fold(rows[0][0])} if pid.startswith("note-") and not namesakes else set()
+    FORGOTTEN.write_text(json.dumps(sorted(forgotten | {pid} | by_name), indent=1), encoding="utf-8")
     return {"forgot": "person", "name": rows[0][0], "notes": len(notes), "kept_out_of_rebuilds": True}
 
 

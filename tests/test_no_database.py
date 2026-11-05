@@ -23,9 +23,10 @@ def test_without_a_database():
 
     check(run("--version").returncode == 0, "--version works")
     check("forget" in run("--help").stdout, "--help lists the commands")
-    for command in (["notes"], ["followups"], ["forget", "note", "note-x", "--yes"]):
+    # --cloud, so that load and export use FALKORDB_URL above and never a FalkorDB running on this machine.
+    for command in (["notes"], ["followups"], ["forget", "note", "note-x", "--yes"], ["load", "--sample", "--cloud"], ["export", "--cloud"], ["view"]):
         r = run(*command)
-        check(r.returncode != 0 and "FalkorDB" in r.stderr and "Traceback" not in r.stderr, f"{command[0]} with no database: a clear error")
+        check(r.returncode != 0 and "docker run" in r.stderr and "Traceback" not in r.stderr, f"{command[0]} with no database: says how to start one")
 
     server = Server([*brain, "mcp"], home, env)
     tools = sorted(t["name"] for t in server.request("tools/list")["result"]["tools"])

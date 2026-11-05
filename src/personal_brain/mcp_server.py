@@ -16,11 +16,10 @@ from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
 from personal_brain import __version__, activity, memory
+from personal_brain.paths import cannot_reach
 
 GRAPH = None
-NO_DATABASE = ("Cannot reach FalkorDB ({}). Tell the user to start it with "
-               "`docker run -p 6379:6379 -p 3000:3000 -v falkordb_data:/var/lib/falkordb/data -it --rm falkordb/falkordb:latest`, "
-               "or to put their FalkorDB Cloud URL in FALKORDB_URL in the .env file. Then try again.")
+NO_DATABASE = "{} Tell the user to do this, then try again."
 
 
 def answer(fn, *args):
@@ -36,7 +35,7 @@ def answer(fn, *args):
         return result
     except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError) as e:
         GRAPH = None
-        return {"error": NO_DATABASE.format(e)}
+        return {"error": NO_DATABASE.format(cannot_reach(e))}
     except Exception as e:
         return {"error": str(e)}
 

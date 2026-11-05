@@ -210,6 +210,9 @@ def load_connections():
         slug = slug_of(row["URL"])
         if not slug or slug in forgotten:
             continue
+        if "name:" + fold(f"{row['First Name']} {row['Last Name']}") in forgotten:
+            print(f"Left out {row['First Name']} {row['Last Name']}: you forgot someone with this name. To undo, edit {FORGOTTEN}.")
+            continue
         people[slug] = {
             "id": slug,
             "name": f"{row['First Name']} {row['Last Name']}".strip(),
@@ -585,16 +588,22 @@ def main():
     else:
         db = FalkorDB(host="localhost", port=6379)
     graph = db.select_graph(GRAPH)
-    old_jobs = job_changes.read_jobs(graph) if GRAPH in db.list_graphs() else {}
+    exists = GRAPH in db.list_graphs()
+    old_jobs = job_changes.read_jobs(graph) if exists else {}
     kept = None
+    place = ("cloud/" if "--cloud" in sys.argv else "local/") + GRAPH
     if "--force" not in sys.argv:
-        kept = notes_backup.pending() or (notes_backup.snapshot(graph) if GRAPH in db.list_graphs() else None)
+        forgotten = set(json.loads(FORGOTTEN.read_text(encoding="utf-8"))) if FORGOTTEN.exists() else set()
+        kept = notes_backup.choose(notes_backup.pending(), notes_backup.snapshot(graph) if exists else None, place, forgotten)
         if kept and kept["nodes"]:
             notes_backup.save(kept)
     try:
         graph.delete()
     except Exception:
         pass
+    if kept and kept["nodes"]:
+        # From here on, the backup is the only copy. A stop before here leaves the graph as it was.
+        notes_backup.save({**kept, "graph_deleted": GRAPH not in db.list_graphs()})
     graph = db.select_graph(GRAPH)
 
     def run(query, rows, size=1000):
@@ -669,7 +678,7 @@ def main():
         print(f"Kept {notes} notes and what they added. Use --force to drop them.")
         if merged:
             print(f"Merged {merged} people you saved with the same people in this import.")
-    notes_backup.clear()
+    notes_backup.clear(place)
     job_changes.report(job_news)
 
     nodes = graph.query("MATCH (n) RETURN labels(n)[0], count(n) ORDER BY count(n) DESC").result_set

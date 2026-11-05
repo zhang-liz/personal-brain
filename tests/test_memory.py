@@ -228,7 +228,7 @@ def run_half_saved(g):
     r = memory.remember(g, "Stuck Stu", **call)
     check(r["status"] == "saved", "a retry after a dead connection saves, and does not say already_saved")
     check(count("MATCH (p:Person {name: 'Stuck Stu'}) RETURN count(p)") == 1, "the half-saved person does not stay as a second person")
-    check(count("MATCH (n:Note {saving: true}) RETURN count(n)") == 0, "no half-saved note stays")
+    check(count("MATCH (n:Note) WHERE n.saving IS NOT NULL RETURN count(n)") == 0, "no half-saved note stays")
     row = g.ro_query("MATCH (p:Person {id: $id})-[:WORKED_AT {current: true}]->(c), (p)-[:MET_AT]->(e) RETURN c.name, e.name",
                      {"id": r["person"]["id"]}).result_set
     check(row == [["Half Co", "Half Meetup"]], "the retry saves the job and the event")
