@@ -10,6 +10,12 @@ from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parent
 CLONE = PACKAGE.parent.parent
+START_DATABASE = ("`docker run -p 6379:6379 -p 3000:3000 -v falkordb_data:/var/lib/falkordb/data -it --rm falkordb/falkordb:latest`, "
+                  "or put your FalkorDB Cloud URL in FALKORDB_URL in the .env file")
+
+
+def cannot_reach(error):
+    return f"Cannot reach FalkorDB ({error}). Start it with {START_DATABASE}."
 
 
 def find_home():

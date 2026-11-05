@@ -7,6 +7,7 @@ import redis
 
 from personal_brain import memory
 from personal_brain.notes import printable
+from personal_brain.paths import cannot_reach
 
 
 def main():
@@ -15,7 +16,7 @@ def main():
         rows = g.ro_query("MATCH (f:FollowUp {open: true})-[:FOR]->(p:Person)"
                           " RETURN f.due, f.id, p.name, f.text ORDER BY coalesce(f.due, '9999'), f.on").result_set
     except redis.exceptions.ConnectionError as e:
-        raise SystemExit(f"Cannot reach FalkorDB ({e}).") from None
+        raise SystemExit(cannot_reach(e)) from None
     if not rows:
         print(f"No open follow-ups on {where}.")
         return

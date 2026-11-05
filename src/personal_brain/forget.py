@@ -15,7 +15,7 @@ import sys
 import redis
 
 from personal_brain import activity, memory
-from personal_brain.paths import HOME
+from personal_brain.paths import HOME, cannot_reach
 
 USAGE = ("Use: personal-brain forget person <name or id> [--yes], personal-brain forget note <id> [--yes], "
          "or personal-brain forget all-notes [--yes]")
@@ -81,7 +81,7 @@ def main():
         print(f"Deleted {memory.forget_all_notes(g)} nodes." if every_note else memory.forget(g, what, id_))
         refresh_viewer(where)
     except redis.exceptions.ConnectionError as e:
-        sys.exit(f"Cannot reach FalkorDB ({e}).")
+        sys.exit(cannot_reach(e))
 
 
 if __name__ == "__main__":

@@ -26,7 +26,7 @@ def read_jobs(graph):
 def mark(graph, old):
     """Mark each job that is new since the old graph, and keep older marks. Returns the news as text lines."""
     today = date.today().isoformat()
-    news, marks = [], []
+    news, marks = {}, []
     for pid, jobs in read_jobs(graph).items():
         before = old.get(pid)
         if not before:    # new to the network: not a job change
@@ -41,11 +41,11 @@ def mark(graph, old):
                 left = [b["company"] for b in before if b["current"] and not b["note"]
                         and not any(same_company(b["id"], j["id"]) for j in jobs)]
                 marks.append({"p": pid, "c": job["id"], "on": today, "left": ", ".join(left) or None})
-                news.append(f"{job['person']}: " + (f"{', '.join(left)} -> " if left else "") + job["company"])
+                news.setdefault(pid, (job["person"], left, []))[2].append(job["company"])
     for i in range(0, len(marks), PAGE):
         graph.query("UNWIND $rows AS r MATCH (:Person {id: r.p})-[w:WORKED_AT {current: true}]->(:Company {id: r.c})"
                     " SET w.noticed_on = r.on, w.left = r.left", {"rows": marks[i:i + PAGE]})
-    return news
+    return [f"{person}: " + (f"{', '.join(left)} -> " if left else "") + ", ".join(jobs) for person, left, jobs in news.values()]
 
 
 def report(news):

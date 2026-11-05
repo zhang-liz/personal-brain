@@ -12,7 +12,6 @@ here deletes. To clear notes, run `personal-brain forget all-notes`.
 """
 
 import json
-import re
 import shutil
 import time
 from functools import partial
@@ -29,30 +28,13 @@ ROOT = HOME / "data" / "viewer"
 GRAPH, SOURCE = memory.connect()
 memory.setup(GRAPH)
 
-# "met NAME [from COMPANY] [at EVENT][, note]"
-MET_RE = re.compile(
-    r"^\s*(?:i\s+)?(?:just\s+)?met\s+(?P<name>.+?)"
-    r"(?:\s+(?:from|of)\s+(?P<company>.+?))?"
-    r"(?:\s+(?:at|during)\s+(?P<event>.+?))?"
-    r"\s*(?:(?:[.;:!]|,|\s[-–—]\s)\s*(?P<note>.*))?$", re.I)
-
-
-def parse(text):
-    m = MET_RE.match(text.strip())
-    if not m:
-        return None
-    parts = {k: (v or "").strip(" .") for k, v in m.groupdict().items()}
-    # "met Maya at Supabase" with no event keyword left: treat a lone "at X" as the event.
-    return parts if parts["name"] else None
-
-
 def q(cypher, params=None):
     return GRAPH.query(cypher, params or {})
 
 
 def remember(text):
     """The viewer's Remember box: the same write path as the MCP tool, from one typed sentence."""
-    parts = parse(text)
+    parts = memory.parse_met(text)
     if not parts:
         return 400, {"error": "Try: Met <name> from <company> at <event>, <what you talked about>"}
     r = memory.remember(GRAPH, parts["name"], parts["company"], parts["event"], parts["note"])
@@ -197,6 +179,8 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 def main():
+    if not (ROOT / "graph.json").exists():
+        raise SystemExit("The viewer has no data yet. Run personal-brain export first.")
     shutil.copytree(PACKAGE / "viewer", ROOT, dirs_exist_ok=True)
     server = ThreadingHTTPServer(("127.0.0.1", 8765), partial(Handler, directory=str(ROOT)))
     print(f"serving http://127.0.0.1:8765 (live API on {SOURCE})")

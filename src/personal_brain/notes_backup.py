@@ -11,7 +11,8 @@ from personal_brain.companies import same_company
 from personal_brain.paths import HOME
 
 BACKUP = HOME / "data" / "notes-backup.json"
-ONE_PER_PAIR = {"WORKED_AT", "INTO", "ATTENDED", "KNOWS"}   # when the import already has this link, the note adds no second one
+FIELDS = ("title", "location", "email")    # facts a note can correct on a person: the same as memory.FIELDS
+ONE_PER_PAIR = {"INTO", "ATTENDED", "KNOWS"}   # when the import already has this link, the note adds no second one
 
 
 def snapshot(graph):
@@ -32,6 +33,42 @@ def pending():
     return json.loads(BACKUP.read_text(encoding="utf-8")) if BACKUP.exists() else None
 
 
+def owner(props):
+    """The note that made or changed this link."""
+    return props.get("note") or props.get("ended_by") or props.get("title_note")
+
+
+def merge(saved, live):
+    """The backup, plus each note saved in the half-built graph since the rebuild stopped."""
+    if not live:
+        return saved
+    have = {n["props"]["id"] for n in saved["nodes"] if n["label"] == "Note"}
+    new = {n["props"]["id"] for n in live["nodes"] if n["label"] == "Note"} - have
+    return {"nodes": saved["nodes"] + [n for n in live["nodes"] if n["props"]["id"] in new or n["props"].get("note") in new],
+            "about": saved["about"] + [a for a in live["about"] if a["note"] in new],
+            "links": saved["links"] + [l for l in live["links"] if owner(l["props"]) in new]}
+
+
+def without_forgotten(snap, forgotten):
+    """A person forgotten since the backup stays forgotten, with every note about them."""
+    notes = {a["note"] for a in snap["about"] if a["props"]["id"] in forgotten}
+    return {"nodes": [n for n in snap["nodes"] if not {n["props"]["id"], n["props"].get("note")} & (notes | forgotten)],
+            "about": [a for a in snap["about"] if a["note"] not in notes],
+            "links": [l for l in snap["links"] if owner(l["props"]) not in notes and not {l["from"]["id"], l["to"]["id"]} & forgotten]}
+
+
+def choose(saved, live, place, forgotten):
+    """What a rebuild must keep: the backup from a rebuild that stopped, the live graph (None if it has none), or both."""
+    if saved is None:
+        return live and {**live, "place": place, "graph_deleted": False}
+    if saved.get("place", place) != place:
+        raise SystemExit(f"A rebuild of {saved['place']} stopped halfway, and the only copy of its notes is in {BACKUP}.\n"
+                         f"Run load for {saved['place']} first, or delete that file to drop those notes.")
+    if live and saved.get("graph_deleted") is False:
+        return {**live, "place": place, "graph_deleted": False}    # it stopped before it deleted the graph, so the graph is right
+    return {**without_forgotten(merge(saved, live), forgotten), "place": place, "graph_deleted": True}
+
+
 def save(snap):
     BACKUP.parent.mkdir(parents=True, exist_ok=True)
     temp = BACKUP.with_suffix(".tmp")
@@ -39,8 +76,11 @@ def save(snap):
     temp.replace(BACKUP)
 
 
-def clear():
-    BACKUP.unlink(missing_ok=True)
+def clear(place=None):
+    """Delete the backup, unless it belongs to another graph: it may be the only copy of those notes."""
+    saved = pending() if place else None
+    if not saved or saved.get("place", place) == place:
+        BACKUP.unlink(missing_ok=True)
 
 
 def name(text):
@@ -81,6 +121,14 @@ def restore(graph, snap):
     def person_id(label, props):
         return merged.get(props["id"], props["id"]) if label == "Person" else props["id"]
 
+    # What this import says about each person. Forgetting the oldest note brings this back, not what an older import said.
+    imported_facts = {}
+    for pid in {person_id(a["label"], a["props"]) for a in snap["about"] if a["label"] == "Person"}:
+        rows = graph.ro_query("MATCH (p:Person {id: $id}) OPTIONAL MATCH (p)-[:LIVES_IN]->(c:City)"
+                              " RETURN p.title, p.location, p.email, p.company, collect(c.id), collect(c.name)", {"id": pid}).result_set
+        if rows:
+            imported_facts[pid] = rows[0]
+
     def add_node(label, props, note):
         if label != "Me" and person_id(label, props) == props["id"]:
             # A node missing from the new import now comes from the note, so forgetting the note removes it.
@@ -113,8 +161,26 @@ def restore(graph, snap):
                 if field == "location":
                     graph.query("MATCH (:Person {id: $id})-[r:LIVES_IN]->() WHERE r.note IS NULL DELETE r", {"id": pid})
 
+    def same_job_now(pid, company):
+        """This person's current jobs at this company, as the new import spells it."""
+        rows = graph.ro_query("MATCH (:Person {id: $id})-[:WORKED_AT {current: true}]->(c:Company) RETURN c.id", {"id": pid}).result_set
+        return [c for (c,) in rows if same_company(c, company)]
+
+    def change_job(pid, company, props):
+        """Put a note's change on the import's current job. A past role at the same company stays as it was."""
+        changes = {}
+        if props.get("ended_by"):
+            changes = {"ended_on": props.get("ended_on"), "ended_by": props["ended_by"], "current": False}
+        if props.get("title_note"):
+            changes.update({k: props[k] for k in ("title", "title_note", "title_log") if k in props})
+            graph.query("MATCH (:Person {id: $id})-[r:WORKED_AT {current: true}]->(:Company {id: $c}) WHERE r.title_note IS NULL"
+                        " SET r.prev_title = coalesce(r.title, '')", {"id": pid, "c": company})
+        graph.query("MATCH (:Person {id: $id})-[r:WORKED_AT {current: true}]->(:Company {id: $c}) SET r += $changes",
+                    {"id": pid, "c": company, "changes": changes})
+
     imported = {}
-    for l in snap["links"]:
+    # The import's own links first, then ended jobs, then current ones: "moved away and came back" must end with a current job.
+    for l in sorted(snap["links"], key=lambda l: (bool(l["props"].get("note")), bool(l["props"].get("current")))):
         kind = name(l["type"])
         a, b = person_id(l["from_label"], l["from"]), person_id(l["to_label"], l["to"])
         if a == b:
@@ -122,13 +188,13 @@ def restore(graph, snap):
         ends = f"(a:{name(l['from_label'])} {{id: $a}})", f"(b:{name(l['to_label'])} {{id: $b}})"
         ids = {"a": a, "b": b}
         props = l["props"]
-        if not props.get("note"):
-            # The import's own link, which a note ended or gave a title.
-            changes = {k: props[k] for k in ("ended_on", "ended_by", "title", "title_note", "prev_title") if k in props}
-            if "ended_by" in props:
-                changes["current"] = False
-            graph.query(f"MATCH {ends[0]}-[r:{kind}]->{ends[1]} SET r += $changes", {**ids, "changes": changes})
-            continue
+        if kind == "WORKED_AT" and (not props.get("note") or props.get("current") or props.get("ended_by")):
+            # A job the import may have too, perhaps spelled another way, or ended by now.
+            now = same_job_now(a, b)
+            for company in now:
+                change_job(a, company, props)
+            if now or not props.get("note"):
+                continue
         key = (kind, a, b)
         if kind in ONE_PER_PAIR and key not in imported:
             arrow = f"-[r:{kind}]-" if kind == "KNOWS" else f"-[r:{kind}]->"
@@ -138,4 +204,20 @@ def restore(graph, snap):
         graph.query(f"MATCH {ends[0]}, {ends[1]} CREATE (a)-[r:{kind}]->(b) SET r = $props", {**ids, "props": props})
         if kind == "WORKED_AT" and props.get("current"):
             graph.query("MATCH (a {id: $a}) SET a.company = $company", {"a": a, "company": l["from"].get("company", "")})
+    graph.query("MATCH (c:Company {source: 'agent'}) WHERE NOT (c)--() DELETE c")    # a note's spelling of a job the import has
+
+    started = {(person_id("Person", l["from"]), l["to"].get("name")) for l in snap["links"] if l["type"] == "WORKED_AT" and l["props"].get("note")}
+    notes = {n["props"]["id"]: n["props"] for n in snap["nodes"] if n["label"] == "Note"}
+    for a in snap["about"]:
+        pid, note, facts = person_id(a["label"], a["props"]), notes.get(a["note"]), imported_facts.get(person_id(a["label"], a["props"]))
+        if not note or not facts:
+            continue
+        undo = {f"prev_{field}": value or "" for field, value in zip(FIELDS, facts)
+                if note.get(f"set_{field}") and not note.get(f"prev_{field}_note")}
+        if "prev_location" in undo:
+            undo.update(prev_cities=facts[4], prev_city_names=facts[5])
+        if "prev_company" in note and (pid, note["prev_company"]) not in started:
+            undo["prev_company"] = facts[3] or ""
+        if undo:
+            graph.query("MATCH (n:Note {id: $id}) SET n += $undo", {"id": a["note"], "undo": undo})
     return sum(n["label"] == "Note" for n in snap["nodes"]), len(merged)

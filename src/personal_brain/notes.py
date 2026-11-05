@@ -12,6 +12,7 @@ import sys
 import redis
 
 from personal_brain import memory
+from personal_brain.paths import cannot_reach
 
 DEFAULT_LIMIT = 20
 
@@ -34,7 +35,7 @@ def main():
         rows = g.ro_query("MATCH (n:Note) OPTIONAL MATCH (n)-[:ABOUT]->(p:Person)"
                           f" RETURN n.on, n.id, p.name, n.text ORDER BY n.on DESC, id(n) DESC LIMIT {limit}").result_set
     except redis.exceptions.ConnectionError as e:
-        sys.exit(f"Cannot reach FalkorDB ({e}).")
+        sys.exit(cannot_reach(e))
     if not total:
         print(f"No notes on {where}.")
         return

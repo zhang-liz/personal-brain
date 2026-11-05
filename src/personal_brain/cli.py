@@ -3,10 +3,12 @@
 import importlib
 import sys
 
-from personal_brain import __version__
-from personal_brain.paths import HOME
+import redis
 
-USAGE = f"""personal-brain {__version__}: your LinkedIn network as agent memory in FalkorDB.
+from personal_brain import __version__
+from personal_brain.paths import HOME, cannot_reach
+
+USAGE = f"""personal-brain {__version__}: an MCP server that gives your AI agent memory of your professional network.
 
 Commands:
   mcp                      run the MCP server for your agent (stdio)
@@ -41,22 +43,25 @@ def main():
         print(f"personal-brain {__version__}")
     elif command in ("mcp", "load", "export", "view", "notes", "followups", "forget"):
         HOME.mkdir(parents=True, exist_ok=True, mode=0o700)
-        if command == "mcp":
-            run("mcp_server", *args)
-        elif command == "load":
-            run("load_graph", *args)
-        elif command == "view":
-            run("server", *args)
-        elif command == "notes":
-            run("notes", *args)
-        elif command == "followups":
-            run("followups", *args)
-        elif command == "forget":
-            run("forget", *args)
-        else:
-            run("export_graph", *args)
-            run("layout_graph", "--dims=2")
-            run("export_stories", *args)
+        try:
+            if command == "mcp":
+                run("mcp_server", *args)
+            elif command == "load":
+                run("load_graph", *args)
+            elif command == "view":
+                run("server", *args)
+            elif command == "notes":
+                run("notes", *args)
+            elif command == "followups":
+                run("followups", *args)
+            elif command == "forget":
+                run("forget", *args)
+            else:
+                run("export_graph", *args)
+                run("layout_graph", "--dims=2")
+                run("export_stories", *args)
+        except redis.exceptions.ConnectionError as e:
+            sys.exit(cannot_reach(e))
     elif command in ("", "-h", "--help", "help"):
         print(USAGE)
     else:

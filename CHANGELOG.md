@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+Fixed:
+- A second session no longer deletes a note that another session is saving. Before, about 3 notes in 10 were lost when saves overlapped, and the reply still said "saved".
+- A rebuild that stopped halfway no longer overwrites newer notes, or brings back a forgotten person. A rebuild now stops if the backup belongs to another graph.
+- After a rebuild, `forget` brings back what the new import says, not an old or empty value.
+- A rebuild changes only a current job: a past role at the same company keeps its title and its end. A job the import ended stays ended. A new spelling of a company is one job, not two.
+- `Kestrel Capital` is no longer the same company as `Kestrel`, and `Kestrel Motion` is not `Kestrel Notion`. Only common last words such as `Labs` and `Inc` can differ. `remember` says when it treats a name as the same job.
+- `forget` with several notes: the right company comes back, a title on one job stays off the others, a job or topic that another note also has stays, and a person from a note goes with their last note.
+- `remember` saves the same words again on the same day when the fact has changed since: an email back to its old value, a follow-up asked again after it was done, a return to an old job.
+- A save that stops at the location step keeps the person's city. A save that stops at a job change cannot leave two current jobs.
+- A person from a note whom you forgot stays out of later imports, unless the graph had someone else with that name. `load` says who it left out.
+- The job report counts people, not jobs. Two new jobs show on one line.
+- The viewer's text box reads `Dr. Jonas` and `Node.js` correctly.
+
+Changed:
+- Every command says how to start FalkorDB when it cannot reach it, with no traceback.
+- `view` before `export` says what to run.
+- `--help` says first that this is an MCP server.
+- The README has a JSON config for other MCP clients.
+
 ## 0.3.1 (2026-11-04)
 
 Changed:

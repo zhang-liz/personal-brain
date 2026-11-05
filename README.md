@@ -5,7 +5,7 @@
 <!-- mcp-name: io.github.zhang-liz/personal-brain -->
 
 [![PyPI](https://img.shields.io/pypi/v/personal-brain)](https://pypi.org/project/personal-brain/)
-[![Python](https://img.shields.io/pypi/pyversions/personal-brain)](https://pypi.org/project/personal-brain/)
+[![Python](https://img.shields.io/pypi/pyversions/personal-brain?cacheSeconds=3600)](https://pypi.org/project/personal-brain/)
 [![Tests](https://github.com/zhang-liz/personal-brain/actions/workflows/test.yml/badge.svg)](https://github.com/zhang-liz/personal-brain/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/zhang-liz/personal-brain/blob/main/LICENSE)
 
@@ -51,7 +51,15 @@ Try:
 - "Who could introduce me to someone at a well-funded startup?"
 - "I met Oskar Mensah at the Graph & RAG Meetup. He's building agent memory." (There are two Oskar Mensahs, so it asks which one.)
 
-**Other MCP clients:** use command `uvx`, arguments `personal-brain mcp` (stdio).
+**Other MCP clients:** the server runs over stdio. Most clients take this config:
+
+```json
+{
+  "mcpServers": {
+    "personal-brain": { "command": "uvx", "args": ["personal-brain", "mcp"] }
+  }
+}
+```
 
 ### FalkorDB Cloud
 
