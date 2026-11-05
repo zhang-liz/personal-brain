@@ -309,3 +309,65 @@ def test_live_updates_read_past_the_row_limit(folder, viewer):
     finally:
         db.execute_command("GRAPH.CONFIG", "SET", "RESULTSET_SIZE", size)
     assert len(capped["nodes"]) == len(whole["nodes"]) > 8 and len(capped["edges"]) == len(whole["edges"]) > 8
+
+
+# ---------- the viewer's files stay true ----------
+
+def stories_from(folder):
+    r = subprocess.run([sys.executable, "-m", "personal_brain.export_stories"], env=folder.env, capture_output=True, text=True, cwd=folder.path)
+    assert r.returncode == 0, r.stderr[-500:]
+    return {s["id"]: s for s in json.loads((folder.path / "data/viewer/stories.json").read_text(encoding="utf-8"))}
+
+
+def test_stories_read_past_the_row_limit(folder):
+    clean(folder.run("load", "--sample"))
+    whole = stories_from(folder)
+    assert max(s["rows"] for s in whole.values()) > 20
+    db = memory.FalkorDB().connection
+    size = db.execute_command("GRAPH.CONFIG", "GET", "RESULTSET_SIZE")[1]
+    db.execute_command("GRAPH.CONFIG", "SET", "RESULTSET_SIZE", 20)
+    try:
+        capped = stories_from(folder)
+    finally:
+        db.execute_command("GRAPH.CONFIG", "SET", "RESULTSET_SIZE", size)
+    for name, story in whole.items():
+        assert capped[name]["rows"] == story["rows"], name
+        assert capped[name]["nodes"] == story["nodes"], name
+        assert sorted(capped[name]["pairs"]) == sorted(story["pairs"]), name
+
+
+def test_a_story_that_has_two_parts_counts_a_row_once(folder):
+    clean(folder.run("load", "--sample"))
+    g = memory.connect(GRAPH)[0]
+    rows = g.ro_query(next(s for s in export_stories.STORIES if s["id"] == "speak")["cypher"]).result_set
+    assert stories_from(folder)["speak"]["rows"] == len(rows)
+
+
+def test_load_writes_the_viewer_files_again(folder):
+    clean(folder.run("load", "--sample"))
+    clean(folder.run("export"))
+    file = folder.path / "data/viewer/graph.json"
+    file.write_text('{"nodes": []}', encoding="utf-8")
+    clean(folder.run("load", "--sample", "--yes"))
+    assert len(json.loads(file.read_text(encoding="utf-8"))["nodes"]) > 200
+
+
+def test_load_of_another_graph_leaves_the_viewer_files(folder):
+    clean(folder.run("load", "--sample"))
+    clean(folder.run("export"))
+    file = folder.path / "data/viewer/graph.json"
+    file.write_text('{"nodes": []}', encoding="utf-8")
+    other = GRAPH + "_other"
+    try:
+        clean(folder.run("load", "--sample", "--yes", "--graph", other))
+    finally:
+        memory.connect(other)[0].delete()
+    assert json.loads(file.read_text(encoding="utf-8")) == {"nodes": []}
+
+
+def test_activity_says_when_the_viewer_files_change(folder, viewer):
+    read = lambda: json.load(urllib.request.urlopen("http://127.0.0.1:8765/api/activity?since=-1", timeout=10))["map"]
+    before = read()
+    assert read() == before
+    clean(folder.run("export"))
+    assert read() != before

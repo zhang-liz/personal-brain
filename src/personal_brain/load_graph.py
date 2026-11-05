@@ -32,7 +32,7 @@ from falkordb import FalkorDB
 
 from personal_brain import job_changes, notes_backup
 from personal_brain.companies import norm
-from personal_brain.paths import HOME, PACKAGE, cloud_url, open_url, printable
+from personal_brain.paths import HOME, PACKAGE, cloud_url, open_url, printable, refresh_viewer
 SAMPLE = "--sample" in sys.argv
 SAMPLE_DIR = Path(os.environ.get("PB_SAMPLE_DIR", PACKAGE / "sample_data"))
 ENRICHED = (SAMPLE_DIR if SAMPLE else HOME / "data") / "enriched"
@@ -777,6 +777,11 @@ def main():
             print(f"Merged {merged} people you saved with the same people in this import.")
     notes_backup.clear(place)
     job_changes.report(job_news)
+    # A rebuild gives every node a new id, and the viewer's files find people by id. Another graph has other files.
+    if GRAPH == os.environ.get("PB_GRAPH", "network"):
+        problem = refresh_viewer(cloud="--cloud" in sys.argv)
+        if problem:
+            print(f"The graph is ready, but the viewer's files are old. Run personal-brain export.\n{problem}")
 
     nodes = graph.query("MATCH (n) RETURN labels(n)[0], count(n) ORDER BY count(n) DESC").result_set
     rels = graph.query("MATCH ()-[r]->() RETURN type(r), count(r) ORDER BY count(r) DESC").result_set

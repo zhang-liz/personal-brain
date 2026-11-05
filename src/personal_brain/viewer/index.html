@@ -218,6 +218,19 @@ const live = await fetch(`/api/delta?since=${graph.nodes.length}`, { cache: "no-
   .then((r) => (r.ok ? r.json() : null)).catch(() => { liveFailed = true; return null; });
 document.getElementById("loading").remove();
 
+// FalkorDB gives the id of a deleted node to the next new node. If the file is older than the graph, the graph is right.
+if (live) {
+  const stale = new Set(live.nodes.filter((n) => {
+    const old = graph.nodes[n.id], label = old && graph.labels[old[0]];
+    return T_IDX[label] !== undefined && (label !== n.label || old[1] !== n.name);
+  }).map((n) => n.id));
+  if (stale.size) {
+    if (!graph.labels.includes("Gone")) graph.labels.push("Gone");
+    stale.forEach((i) => { graph.nodes[i] = [graph.labels.indexOf("Gone"), "", "", 0, ""]; });
+    graph.edges = graph.edges.filter((e) => !stale.has(e[0]) && !stale.has(e[1]));
+  }
+}
+
 // ---------- data (typed arrays with spare room for live "remember" additions) ----------
 const N0 = graph.nodes.length, E0 = graph.edges.length;
 const CAP_N = (live ? live.nodes.reduce((top, n) => Math.max(top, n.id + 1), N0) : N0) + 500;
@@ -723,13 +736,24 @@ function stepTimelapse(now) {
 // ---------- live "remember" (writes to FalkorDB through the local server) ----------
 const rememberForm = document.getElementById("remember"), rememberText = document.getElementById("rememberText");
 const rememberHint = document.getElementById("rememberHint");
-const FULL_MAP = "Saved. Reload the page to make room on the map.";
+// The map's arrays have a fixed size, and an id can come to mean someone else. A new page reads the graph again.
+let reloading = false;
+function reloadMap(now) {
+  if (reloading) return;
+  reloading = true;
+  rememberHint.textContent = "Updating the map…";
+  // Never lose text you are typing. Unless the map must change now, wait until you stop looking at something too.
+  const busy = () => rememberText.value.trim() || (!now && (timelapse || (highlight && !highlight.live)));
+  const go = () => (busy() ? setTimeout(go, 1000) : location.reload());
+  setTimeout(go, 1500);
+}
 function addGraphData(data) {
   const fresh = [];
-  let full = false;
+  let full = false, changed = false;
   for (const n of data.nodes) {
     const i = n.id;
-    if (exists[i] || T_IDX[n.label] === undefined) continue;
+    if (exists[i]) { changed ||= names[i] !== n.name || TYPES[typeOf[i]].label !== n.label; continue; }
+    if (T_IDX[n.label] === undefined) continue;
     if (i >= CAP_N) { full = true; continue; }
     exists[i] = 1; typeOf[i] = T_IDX[n.label]; names[i] = n.name; subs[i] = n.sub; whens[i] = n.when;
     nN = Math.max(nN, i + 1); fresh.push(i);
@@ -761,7 +785,7 @@ function addGraphData(data) {
   const now = performance.now();
   fresh.forEach((i) => spawning.set(i, now));
   updateStats(); renderLayers();
-  if (full) rememberHint.textContent = FULL_MAP;
+  if (full || changed) reloadMap(changed);
   return fresh;
 }
 rememberForm.addEventListener("submit", async (ev) => {
@@ -776,7 +800,7 @@ rememberForm.addEventListener("submit", async (ev) => {
     if (!res.ok) { rememberHint.textContent = data.error || "Could not save"; return; }
     rememberText.value = "";
     addGraphData(data);
-    if (data.person >= CAP_N) { rememberHint.textContent = FULL_MAP; return; }
+    if (reloading) return;
     const p = data.parsed, coworkers = data.edges.filter((e) => e.type === "KNOWS").length;
     rememberHint.textContent = `Saved in ${data.ms} ms on ${data.source || "FalkorDB"}`;
     showToast(`<b></b><small></small>`, 3500);
@@ -952,7 +976,7 @@ async function showActivity(ev) {
   liveTimer = setTimeout(() => { if (highlight?.live) clearHighlight(); }, 6000);
 }
 async function followActivity() {
-  let since = -1;
+  let since = -1, map;
   for (;;) {
     let data;
     try {
@@ -961,6 +985,8 @@ async function followActivity() {
       data = await r.json();
     } catch { return; }
     since = data.seq;  // this also follows the list back to the start after forget clears it
+    if (map !== undefined && data.map !== map) reloadMap(true);  // an export wrote new files: forget, load or you
+    map = data.map;
     for (const ev of data.events) await showActivity(ev).catch(() => {});
     await new Promise((done) => setTimeout(done, 1000));
   }

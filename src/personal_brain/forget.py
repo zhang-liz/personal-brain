@@ -9,13 +9,12 @@ the MCP server: FALKORDB_URL (environment or .env), else local FalkorDB.
     personal-brain forget all-notes                     # clear a live demo
 """
 
-import subprocess
 import sys
 
 import redis
 
 from personal_brain import activity, memory
-from personal_brain.paths import HOME, cannot_reach, printable
+from personal_brain.paths import cannot_reach, printable, refresh_viewer
 
 USAGE = ("Use: personal-brain forget person <name or id> [--yes], personal-brain forget note <id> [--yes], "
          "or personal-brain forget all-notes [--yes]")
@@ -46,17 +45,6 @@ def note_to_forget(g, nid):
     return nid, f"the note about {rows[0][1]}: {rows[0][0]}"
 
 
-def refresh_viewer(where):
-    """The viewer's files hold names and text from the graph, so write them again. With no files, there is nothing to do."""
-    if not (HOME / "data" / "viewer" / "graph.json").exists():
-        return
-    print("Updating the viewer's files...", flush=True)
-    cloud = ["--cloud"] if where == "FalkorDB Cloud" else []
-    r = subprocess.run([sys.executable, "-m", "personal_brain.cli", "export", *cloud], capture_output=True, text=True)
-    if r.returncode:
-        sys.exit(f"Deleted from the graph, but the viewer's files still hold the old data. Run personal-brain export.\n{r.stderr[-300:]}")
-
-
 def main():
     activity.clear()    # before anything else: the names may be of who you are forgetting
     args = sys.argv[1:]
@@ -79,7 +67,9 @@ def main():
             if sys.stdin.readline().strip().lower() not in ("y", "yes"):
                 sys.exit("Nothing deleted.")
         print(f"Deleted {memory.forget_all_notes(g)} nodes." if every_note else printable(str(memory.forget(g, what, id_))))
-        refresh_viewer(where)
+        problem = refresh_viewer(cloud=where == "FalkorDB Cloud")
+        if problem:
+            sys.exit(f"Deleted from the graph, but the viewer's files still hold the old data. Run personal-brain export.\n{problem}")
     except redis.exceptions.ConnectionError as e:
         sys.exit(cannot_reach(e))
 

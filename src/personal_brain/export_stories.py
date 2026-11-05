@@ -14,8 +14,9 @@ from pathlib import Path
 
 from falkordb import FalkorDB
 
-from personal_brain.paths import HOME, cloud_url, open_url
+from personal_brain.paths import HOME, cloud_url, open_url, write_whole
 OUT = Path(os.environ.get("PB_VIEWER_DIR", HOME / "data" / "viewer")) / "stories.json"
+PAGE = 5000
 
 STORIES = [
     {
@@ -112,6 +113,42 @@ RETURN id(me), id(friend), id(p)""",
 ]
 
 
+def split_columns(text):
+    """The parts of a RETURN, split at each comma that is not inside brackets."""
+    columns, depth, part = [], 0, ""
+    for c in text:
+        depth += (c in "([") - (c in ")]")
+        if c == "," and not depth:
+            columns.append(part)
+            part = ""
+        else:
+            part += c
+    return [c.strip() for c in columns + [part]]
+
+
+def every_row(g, cypher):
+    """All rows of a story, and the time they took. A result holds at most 10,000 rows, and the rest would be lost with no error."""
+    rows, seen, ms = [], set(), 0.0
+    for query in cypher.split("\nUNION\n"):
+        match, _, returned = query.rpartition("RETURN ")
+        columns = [c.rsplit(" AS ", 1)[0] for c in split_columns(returned)]
+        named = ", ".join(f"{c} AS c{i}" for i, c in enumerate(columns))
+        order = ", ".join(f"c{i}" for i, c in enumerate(columns) if "collect(" not in c)
+        skip = 0
+        while True:
+            result = g.ro_query(f"{match}RETURN {named} ORDER BY {order} SKIP {skip} LIMIT {PAGE}")
+            ms += result.run_time_ms
+            if not result.result_set:
+                break
+            skip += len(result.result_set)
+            for row in result.result_set:
+                key = json.dumps(row)    # UNION gives a row once
+                if key not in seen:
+                    seen.add(key)
+                    rows.append(row)
+    return rows, ms
+
+
 def connect():
     if "--cloud" in sys.argv:
         return open_url(cloud_url()), "FalkorDB Cloud"
@@ -123,14 +160,14 @@ def main():
     g = db.select_graph(os.environ.get("PB_GRAPH", "network"))
     out = []
     for story in STORIES:
-        result = g.query(story["cypher"])
+        rows, ms = every_row(g, story["cypher"])
         # A column can be a list (collect); flatten it for the lit-node set.
         flat = lambda v: v if isinstance(v, list) else [v]
-        ids = sorted({x for row in result.result_set for v in row for x in flat(v) if x is not None})
+        ids = sorted({x for row in rows for v in row for x in flat(v) if x is not None})
         # Edges to light: only the path steps, not every edge between lit nodes.
         # Keep direction (me -> friend -> expert) so the viewer can send light pulses along it.
         seen, pairs = set(), []
-        for row in result.result_set:
+        for row in rows:
             for a, b in story["pairs"]:
                 for x in flat(row[a]):
                     for y in flat(row[b]):
@@ -139,11 +176,10 @@ def main():
                             pairs.append([x, y])
         focus = g.query(story["focus"]).result_set[0][0]
         out.append({**{k: story[k] for k in ("id", "title", "cypher")},
-                    "focus": focus, "nodes": ids, "pairs": pairs, "rows": len(result.result_set),
-                    "ms": round(result.run_time_ms, 2), "source": where})
-        print(f"{story['id']:9s} rows={len(result.result_set):4d} nodes={len(ids):4d} pairs={len(pairs):4d} "
-              f"{result.run_time_ms:.2f} ms")
-    OUT.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+                    "focus": focus, "nodes": ids, "pairs": pairs, "rows": len(rows),
+                    "ms": round(ms, 2), "source": where})
+        print(f"{story['id']:9s} rows={len(rows):4d} nodes={len(ids):4d} pairs={len(pairs):4d} {ms:.2f} ms")
+    write_whole(OUT, json.dumps(out, ensure_ascii=False, indent=1))
     print(f"wrote {OUT}")
 
 

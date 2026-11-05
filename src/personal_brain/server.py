@@ -87,6 +87,11 @@ def delta(since):
     return {"nodes": nodes, "edges": edges}
 
 
+def map_version():
+    """Changes when an export writes the viewer's files: `forget` and `load` do that. An open page then reads them again."""
+    return "/".join(str(f.stat().st_mtime_ns) for f in (ROOT / "graph.json", ROOT / "stories.json") if f.exists())
+
+
 # A website you visit can send requests to this server. The browser says where they come from.
 THIS_SERVER = ("127.0.0.1:8765", "localhost:8765")
 
@@ -164,7 +169,7 @@ class Handler(SimpleHTTPRequestHandler):
                 seq = int(parse_qs(url.query).get("since", ["-1"])[0])
             except ValueError:
                 return self.send_json(400, {"error": "since must be a number."})
-            return self.send_json(200, activity.since(seq))
+            return self.send_json(200, {**activity.since(seq), "map": map_version()})
         return super().do_GET()
 
     def do_POST(self):

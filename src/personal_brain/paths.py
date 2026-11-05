@@ -5,6 +5,7 @@ Else ~/.personal-brain. That folder holds .env, my_brain.json, your LinkedIn exp
 """
 
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -71,3 +72,22 @@ def cloud_url():
     if not url:
         sys.exit(f"--cloud needs FALKORDB_URL. Set it in the environment or in {HOME / '.env'}.")
     return url
+
+
+def write_whole(path, text):
+    """An open viewer can read this file at any time, so it must never see half of it."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(f".{os.getpid()}.tmp")
+    temp.write_text(text, encoding="utf-8")
+    temp.replace(path)
+
+
+def refresh_viewer(cloud=False):
+    """The viewer's files hold names and ids from the graph, so write them again. With no files, there is nothing to do.
+
+    Returns what went wrong, or nothing."""
+    if not (HOME / "data" / "viewer" / "graph.json").exists():
+        return ""
+    print("Updating the viewer's files...", flush=True)
+    r = subprocess.run([sys.executable, "-m", "personal_brain.cli", "export", *(["--cloud"] if cloud else [])], capture_output=True, text=True)
+    return r.stderr[-300:] if r.returncode else ""
