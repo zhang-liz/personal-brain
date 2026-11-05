@@ -131,7 +131,7 @@ def test_built_package():
             check(r.returncode == 0 and rows == [], "the undo command remember gives removes the note")
             check(run("forget", "note", "note-nope", "--yes").returncode != 0, "forget note: unknown id fails")
 
-            # Windows does not default to UTF-8. Make this system act the same way.
+            # A system with a C locale does not default to UTF-8. Make this one act the same way.
             ascii_only = dict(PYTHONUTF8="0", PYTHONCOERCECLOCALE="0", LC_ALL="C")
             non_latin = server.call("remember", name="山田 太郎", company="株式会社テスト", note="図のデータベース", new_person=True)
             r = run("notes", **ascii_only)
