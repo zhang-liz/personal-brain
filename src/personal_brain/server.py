@@ -20,9 +20,10 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from personal_brain.paths import HOME, PACKAGE
-ROOT = HOME / "data" / "viewer"
 from personal_brain import activity, memory
 from personal_brain.load_graph import TOPIC_RE
+
+ROOT = HOME / "data" / "viewer"
 
 # FALKORDB_URL in .env = FalkorDB Cloud; empty = local Docker FalkorDB on localhost:6379.
 GRAPH, SOURCE = memory.connect()

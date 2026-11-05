@@ -9,7 +9,6 @@ local FalkorDB (graph "pb_mcp_test", deleted at the end). Never touches "network
 import json
 import os
 import subprocess
-import sys
 from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
