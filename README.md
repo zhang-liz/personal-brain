@@ -34,7 +34,7 @@ The made-up sample network has 241 invented people, startups and events, in the 
 **1. Start FalkorDB.** Run it in Docker, or see [FalkorDB Cloud](#falkordb-cloud):
 
 ```bash
-docker run -p 6379:6379 -p 3000:3000 -v falkordb_data:/var/lib/falkordb/data -it --rm falkordb/falkordb:latest
+docker run -p 6379:6379 -p 3000:3000 -v falkordb_data:/var/lib/falkordb/data -it --rm falkordb/falkordb:v4.22.2
 ```
 
 **2. Load the sample, and add the server to Claude Code:**
@@ -81,7 +81,7 @@ Or put `FALKORDB_URL=...` in `~/.personal-brain/.env`.
 |---|---|
 | `remember` | Saves who you met, where they work, where you met, and their title, city and email. To correct a fact, say so: it replaces the old value. If a company or event is one letter off a known one, it saves nothing and the agent asks you. It also keeps follow-ups: "remind me to send Jonas the deck by Friday" stays open until you say it is done. "Kestrel" and "Kestrel Inc." are one company, and a typo in an event name finds the same event. Matches the name to people already in the graph. When it is not sure which person you mean, it saves nothing and asks. A new company ends the old job and keeps it in the history. If the person has several current jobs, it asks which ended. It also records that someone left a job with no new one. The same call twice saves one meeting. Say when you met if it was not today. |
 | `find` | Finds people, companies and events by name, in any script, typos and missing accents included. With `about`, finds people by words in your notes, their topics, skills and headlines, such as "who did I talk to about agent memory?", and says why each one matches. |
-| `ask` | Runs a read-only Cypher query (FalkorDB refuses writes), with a 5 second limit and at most 50 rows. The tool description carries the schema. |
+| `ask` | Runs a read-only Cypher query (FalkorDB refuses writes), with a 5 second limit, at most 50 rows and 40,000 characters. It refuses `LOAD CSV`, which could send your data to the internet. The tool description carries the schema. |
 
 No tool deletes, so text hidden in a LinkedIn headline cannot make your agent delete anything. It could still lead an agent to save a fake note, so each tool tells the agent to treat that text as data, and `personal-brain notes` shows what was saved, newest first. No instruction can fully stop this. To delete, run the command yourself. It asks first, unless you add `--yes`, and it also updates the viewer's files if you have them:
 
@@ -180,7 +180,7 @@ You need Python 3.10 or newer, [uv](https://docs.astral.sh/uv/getting-started/in
 ```bash
 git clone https://github.com/zhang-liz/personal-brain && cd personal-brain
 python3 -m venv .venv && .venv/bin/pip install -e ".[test]"
-docker run -p 6379:6379 -p 3000:3000 -v falkordb_data:/var/lib/falkordb/data -it --rm falkordb/falkordb:latest
+docker run -p 6379:6379 -p 3000:3000 -v falkordb_data:/var/lib/falkordb/data -it --rm falkordb/falkordb:v4.22.2
 ```
 
 Then, in another terminal, run the tests. They use throwaway graphs:

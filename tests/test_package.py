@@ -77,12 +77,12 @@ def test_built_package():
             check(home.is_dir() and home.stat().st_mode & 0o077 == 0, "data folder is private to the user")
 
             server = Server([brain, "mcp"], user, env)
-            found = server.call("find", name="Kestrel Graph", label="Company")
+            found = server.call("find", name="Kestrel Graph", label="Company")["matches"]
             check(found and found[0]["name"] == "Kestrel Graph", "mcp finds the sample network")
             saved = server.call("remember", name="Packaged Pat", note="installed from a wheel", new_person=True)
 
             def exists(name):
-                return isinstance(server.call("find", name=name, label="Person"), list)
+                return server.call("find", name=name, label="Person")["found"] > 0
 
             check(run("forget").returncode != 0, "forget with nothing to forget: says how to use it")
             r = run("forget", "person", saved["person"]["id"])
@@ -288,9 +288,9 @@ def test_built_package():
                 view.wait(timeout=10)
 
             server = Server([brain, "mcp"], user, env)
-            refused = [n for n in ["Evil Eve", "Sandbox Sid", "Rebound Rae"] if isinstance(server.call("find", name=n, label="Person"), list)]
+            refused = [n for n in ["Evil Eve", "Sandbox Sid", "Rebound Rae"] if server.call("find", name=n, label="Person")["found"] > 0]
             check(not refused, f"refused requests saved nothing {refused}")
-            check(isinstance(server.call("find", name="Viewer Vic", label="Person"), list), "the page's request was saved")
+            check(server.call("find", name="Viewer Vic", label="Person")["found"] > 0, "the page's request was saved")
             notes = "MATCH (n:Note) RETURN count(n)"
             check(run("forget", "all-notes").returncode != 0 and server.call("ask", cypher=notes)["rows"][0][0] > 0,
                   "forget all-notes: no answer keeps them")

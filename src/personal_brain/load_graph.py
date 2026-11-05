@@ -139,7 +139,7 @@ def create_search_indexes(graph):
     """Full-text indexes on the folded names, so the agent can find people by name, typos included."""
     for label in ["Person", "Company", "Event"]:
         try:
-            graph.query(f"CALL db.idx.fulltext.createNodeIndex('{label}', 'search')")
+            graph.query(f"CREATE FULLTEXT INDEX FOR (n:{label}) ON (n.search)")    # FalkorDB 6 refuses the older CALL db.idx.fulltext.createNodeIndex('{label}', 'search')
         except Exception as e:
             if "already indexed" not in str(e):
                 raise

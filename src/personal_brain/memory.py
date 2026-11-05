@@ -16,13 +16,18 @@ import uuid
 from datetime import date
 
 from falkordb import FalkorDB, Edge, Node, Path as GraphPath
+from redis.exceptions import ResponseError
 
 from personal_brain.companies import core, near_company, one_edit, same_company, typo
 from personal_brain.load_graph import EVENT_ROLE_RE, FORGOTTEN, TOPIC_RE, city_of, create_search_indexes, fold, forgotten_list, norm, without_accents
 
 from personal_brain.notes_backup import every_row, sync_company
-from personal_brain.paths import env_file_url, open_url
+from personal_brain.paths import SOCKET_TIMEOUT_S, env_file_url, open_url
 MAX_ROWS = 50        # rows ask() hands back to the agent
+MAX_CHARS = 40000    # and how much text: clients refuse a reply that is too long, and the agent then gets nothing
+FIND_SHOWN = 10      # matches the find tool shows
+WHY_CHARS = 300      # how much of a note find about shows
+OUTBOUND = re.compile(r"load.*csv", re.I | re.S)    # no parsing on purpose: a comment or a line break between the words must not get past it
 TIMEOUT_MS = 5000    # longest an ask() query may run
 SAVE_TIME_LIMIT_S = 300    # a note still saving after this long stopped halfway
 LOST_SAVES = set()         # saves in this process that failed and could not clean up, because the connection was down
@@ -53,7 +58,7 @@ Community & Events, Partnerships, Investing, Founder, Podcast & Media."""
 def connect(graph=None):
     """The graph on FalkorDB Cloud (FALKORDB_URL in the environment or .env), else local FalkorDB."""
     url = os.environ["FALKORDB_URL"] if "FALKORDB_URL" in os.environ else env_file_url()
-    db = open_url(url) if url else FalkorDB(host="localhost", port=6379)
+    db = open_url(url) if url else FalkorDB(host="localhost", port=6379, socket_timeout=SOCKET_TIMEOUT_S)
     return db.select_graph(graph or os.environ.get("PB_GRAPH", "network")), ("FalkorDB Cloud" if url else "local FalkorDB")
 
 
@@ -82,17 +87,19 @@ def search_query(text):
 
 
 # What to show next to each match, so the agent (and you) can tell two Jonases apart.
+# Small separate queries on purpose. FalkorDB 6 returns wrong rows, or none, when one query goes on from a search result,
+# has a second OPTIONAL MATCH after a collect, or has a pattern comprehension with an edge property.
 FIND = {
-    "Person": "OPTIONAL MATCH (node)-[:WORKED_AT {current: true}]->(c:Company) "
-              "WITH node, score, collect(c.name) AS now "
-              "OPTIONAL MATCH (f:FollowUp {open: true})-[:FOR]->(node) "
-              "WITH node, score, now, collect(CASE WHEN f IS NULL THEN NULL ELSE {id: f.id, text: f.text, due: f.due} END) AS todo "
-              "RETURN node.id, node.name, score, {headline: node.headline, works_at: now, connected_on: node.connected_on,"
-              " title: node.title, location: node.location, email: node.email, last_message: node.last_message, follow_ups: todo}",
+    "Person": "RETURN node.id, {headline: node.headline, connected_on: node.connected_on, title: node.title,"
+              " location: node.location, email: node.email, last_message: node.last_message}",
     "Company": "OPTIONAL MATCH (node)<-[:WORKED_AT {current: true}]-(p:Person) "
-               "WITH node, score, count(p) AS people "
-               "RETURN node.id, node.name, score, {people_you_know_there: people, funding: node.funding}",
-    "Event": "RETURN node.id, node.name, score, {date: node.date, upcoming: node.upcoming}",
+               "WITH node, count(p) AS people "
+               "RETURN node.id, {people_you_know_there: people, funding: node.funding}",
+    "Event": "RETURN node.id, {date: node.date, upcoming: node.upcoming}",
+}
+FIND_LISTS = {
+    "works_at": "MATCH (node:Person)-[:WORKED_AT {current: true}]->(c:Company) WHERE node.id IN $ids RETURN node.id, collect(c.name)",
+    "follow_ups": "MATCH (f:FollowUp {open: true})-[:FOR]->(node:Person) WHERE node.id IN $ids RETURN node.id, collect({id: f.id, text: f.text, due: f.due})",
 }
 
 
@@ -106,10 +113,26 @@ def find(g, text, label=None, limit=10):
     out = []
     for lab in [label] if label else list(FIND):
         rows = g.ro_query("CALL db.idx.fulltext.queryNodes($label, $q) YIELD node, score "
-                          f"{FIND[lab]} ORDER BY score DESC LIMIT {int(limit)}", {"label": lab, "q": query}).result_set
+                          f"RETURN node.id, node.name, score ORDER BY score DESC LIMIT {int(limit)}", {"label": lab, "q": query}).result_set
+        ids = {"ids": [row[0] for row in rows]}
+        details = dict(g.ro_query(f"MATCH (node:{lab}) WHERE node.id IN $ids {FIND[lab]}", ids).result_set) if rows else {}
+        for field, cypher in FIND_LISTS.items() if lab == "Person" and rows else ():
+            for i, values in g.ro_query(cypher, ids).result_set:
+                details[i][field] = values
         out += [{"label": lab, "id": i, "name": name, "score": round(score, 2),
-                 **{k: v for k, v in detail.items() if v not in (None, "", [])}} for i, name, score, detail in rows]
+                 **{k: v for k, v in details.get(i, {}).items() if v not in (None, "", [])}} for i, name, score in rows]
     return sorted(out, key=lambda m: -m["score"])[:limit]
+
+
+def find_shown(g, text, label=None):
+    """What the find tool shows. It says when there are more, so that the agent does not take 10 people for all of them."""
+    rows = find(g, text, label, FIND_SHOWN + 1)
+    reply = {"found": min(len(rows), FIND_SHOWN), "matches": rows[:FIND_SHOWN]}
+    if not rows:
+        reply["message"] = "No match. Try part of the name, or use remember to add them as a new person."
+    elif len(rows) > FIND_SHOWN:
+        reply.update(more=True, message="There are more matches. Use more of the name, or a label, or count them with ask.")
+    return reply
 
 
 # ---------- about ----------
@@ -145,7 +168,7 @@ def about(g, text):
             if (pid, found) not in seen and has_word_starts(found, words):
                 seen.add((pid, found))
                 person = people.setdefault(pid, {"id": pid, "name": name, "rank": rank, "why": []})
-                person["why"].append({"from": source, "text": found})
+                person["why"].append({"from": source, "text": found[:WHY_CHARS]})
     best = sorted(people.values(), key=lambda p: (p["rank"], -len(p["why"]), p["name"]))[:ABOUT_LIMIT]
     jobs = dict(g.ro_query("MATCH (p:Person) WHERE p.id IN $ids OPTIONAL MATCH (p)-[:WORKED_AT {current: true}]->(c:Company)"
                            " RETURN p.id, collect(c.name)", {"ids": [p["id"] for p in best]}).result_set)
@@ -579,10 +602,31 @@ def plain(v):
 
 def ask(g, cypher, params=None):
     """A read-only Cypher query (GRAPH.RO_QUERY) with a time limit. Writes are refused by FalkorDB itself."""
+    # GRAPH.RO_QUERY allows LOAD CSV, and its URL can hold anything from the graph. So a hidden instruction in a headline could send your network to any server.
+    if OUTBOUND.search(cypher):
+        raise ValueError("ask cannot use LOAD CSV, because it can send your data to the internet. "
+                         "If these words are part of a value, pass the value as a $parameter.")
     g.schema.clear()    # a rebuild renumbers field names, and this client may be older than the rebuild
-    r = g.ro_query(cypher, params or {}, timeout=TIMEOUT_MS)
-    return {"columns": [h[1] for h in r.header], "rows": [[plain(v) for v in row] for row in r.result_set[:MAX_ROWS]],
-            "row_count": len(r.result_set), "truncated": len(r.result_set) > MAX_ROWS, "ms": round(r.run_time_ms, 2)}
+    try:
+        r = g.ro_query(cypher, params or {}, timeout=TIMEOUT_MS)
+    except ResponseError as e:
+        if "timed out" not in str(e):
+            raise
+        raise ValueError(f"The query took more than {TIMEOUT_MS // 1000} seconds. Start from one named node, use a shorter path, or add a LIMIT.") from None
+    rows, chars = [], 0
+    for row in r.result_set[:MAX_ROWS]:
+        row = [plain(v) for v in row]
+        chars += len(json.dumps(row, ensure_ascii=False, default=str))
+        if chars > MAX_CHARS:
+            break
+        rows.append(row)
+    reply = {"columns": [h[1] for h in r.header], "rows": rows, "truncated": len(rows) < len(r.result_set), "ms": round(r.run_time_ms, 2)}
+    if reply["truncated"]:    # FalkorDB stops at 10,000 rows, so the number of rows it sent is not the total
+        reply["message"] = (f"Showing {len(rows)} rows of an unknown total. For a total, use count(). "
+                            "To see other rows, return fewer fields, or use ORDER BY and LIMIT.")
+    else:
+        reply["row_count"] = len(rows)
+    return reply
 
 
 # ---------- forget ----------

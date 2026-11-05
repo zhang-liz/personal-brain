@@ -735,7 +735,7 @@ def run_whole_flow(g):
     check(True, "setup runs twice")
 
     # The sample has two people with the same name; find them with a typo and no accents.
-    twins = g.ro_query("MATCH (p:Person) WITH p.name AS n, collect(p) AS ps WHERE size(ps) = 2"
+    twins = g.ro_query("MATCH (p:Person)-[:WORKED_AT {current: true}]->() WITH p.name AS n, collect(DISTINCT p) AS ps WHERE size(ps) = 2"
                        " RETURN n, [x IN ps | x.id] LIMIT 1").result_set
     name, ids = twins[0]
     typo = name.split()[0][:-1] + " " + name.split()[1]

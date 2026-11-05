@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+Security:
+- `ask` refuses `LOAD CSV`. FalkorDB allows it in a read-only query, so a query could send anything in your graph to any `https://` server, and a hidden instruction in a headline could ask an agent to do that.
+
+Fixed:
+- `load` and every tool work on FalkorDB 6, the image `falkordb/falkordb:latest` moved to on 2026-11-05. Before, `load` stopped with `Received 2 arguments to procedure 'db.idx.fulltext.createNodeIndex'`.
+- `find` shows the right company and follow-ups on FalkorDB 6.
+- The start commands now name `falkordb/falkordb:v4.22.2`, because FalkorDB 6 can return wrong or empty rows for some queries that an agent may write in `ask`.
+- A tool's error is marked with `isError`, as the MCP spec asks. Before, a client saw every error as a success.
+- `ask` no longer says `row_count: 10000` when it cuts a longer result, because 10,000 is only where FalkorDB stops. It says the total is unknown and to use `count()`.
+- `ask` stops at 40,000 characters. Before, one query could return 170,000 characters, which is more than Claude Code accepts, so the agent got nothing.
+- `find` says `more: true` when it shows 10 matches and there are others. Before, 10 of 116 people looked like all of them.
+- `find` about shows at most 300 characters of a note.
+- A misspelled field is refused. Before, `notes` for `note` lost the note, and `remember` still said `saved`.
+- A slow query over a URL says it was slow. Before, it said FalkorDB could not be reached, and told the user to start it.
+- A silent local database no longer holds a tool forever.
+
+Changed:
+- `find` by name always returns an object: `found`, `matches`, and `more` and `message` when they apply. Before, it returned a list, or an object when nothing matched.
+- Replies are JSON with no indents: 16% to 46% shorter in our test.
+- `remember` no longer needs `name` when you pass `person_id` or `follow_up_done`.
+- Tools have titles, and say that they touch only this graph (`openWorldHint`) and that a repeat of `remember` changes nothing (`idempotentHint`).
+
 ## 0.3.2 (2026-11-04)
 
 Fixed:
