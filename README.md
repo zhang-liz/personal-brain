@@ -2,6 +2,8 @@
 
 **An MCP server that gives your AI agent memory of your professional network.**
 
+<!-- mcp-name: io.github.zhang-liz/personal-brain -->
+
 [![PyPI](https://img.shields.io/pypi/v/personal-brain)](https://pypi.org/project/personal-brain/)
 [![Python](https://img.shields.io/pypi/pyversions/personal-brain)](https://pypi.org/project/personal-brain/)
 [![Tests](https://github.com/zhang-liz/personal-brain/actions/workflows/test.yml/badge.svg)](https://github.com/zhang-liz/personal-brain/actions/workflows/test.yml)
@@ -169,17 +171,15 @@ You need Python 3.10 or newer, [uv](https://docs.astral.sh/uv/getting-started/in
 
 ```bash
 git clone https://github.com/zhang-liz/personal-brain && cd personal-brain
-python3 -m venv .venv && .venv/bin/pip install -e .
+python3 -m venv .venv && .venv/bin/pip install -e ".[test]"
 docker run -p 6379:6379 -p 3000:3000 -v falkordb_data:/var/lib/falkordb/data -it --rm falkordb/falkordb:latest
 ```
 
 Then, in another terminal, run the tests. They use throwaway graphs:
 
 ```bash
-.venv/bin/python tests/test_memory.py       # the memory tools (add --cloud to use FALKORDB_URL)
-.venv/bin/python tests/test_no_database.py  # what must work with no database
-.venv/bin/python tests/test_mcp_server.py   # the server, started the way an agent starts it
-.venv/bin/python tests/test_package.py      # the built package, used from another folder
+PATH="$PWD/.venv/bin:$PATH" .venv/bin/python -m pytest          # everything, on local FalkorDB
+.venv/bin/python tests/test_memory.py --cloud                    # the memory tools on FALKORDB_URL
 ```
 
 ## Your data stays yours

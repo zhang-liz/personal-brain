@@ -20,7 +20,7 @@ from personal_brain import memory  # noqa: E402
 def check(ok, what):
     print(("ok   " if ok else "FAIL ") + what)
     if not ok:
-        raise SystemExit(1)
+        raise AssertionError(what)
 
 
 def from_mcp_json(url):
@@ -65,7 +65,7 @@ class Server:
         self.process.wait(timeout=10)
 
 
-def no_database():
+def test_no_database():
     server = from_mcp_json(NO_DATABASE)
     tools = [t["name"] for t in server.request("tools/list")["result"]["tools"]]
     check(sorted(tools) == ["ask", "find", "remember"], "no database: server starts and lists its tools, none deletes")
@@ -82,7 +82,7 @@ def no_database():
     server.stop()
 
 
-def local_database():
+def test_local_database():
     os.environ["FALKORDB_URL"] = ""
     graph, _ = memory.connect(TEST_GRAPH)
     server = from_mcp_json("")
@@ -121,5 +121,5 @@ def local_database():
 
 
 if __name__ == "__main__":
-    no_database()
-    local_database()
+    test_no_database()
+    test_local_database()
