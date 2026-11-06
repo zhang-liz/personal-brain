@@ -12,7 +12,7 @@ from pathlib import Path
 PACKAGE = Path(__file__).resolve().parent
 CLONE = PACKAGE.parent.parent
 SOCKET_TIMEOUT_S = 30    # longer than any query's own limit, so that a slow query does not look like a dead database
-START_DATABASE = ("`docker run -p 6379:6379 -p 3000:3000 -v falkordb_data:/var/lib/falkordb/data -it --rm falkordb/falkordb:v4.22.2`, "
+START_DATABASE = ("`docker run -p 6379:6379 -p 3000:3000 -v falkordb_data:/var/lib/falkordb/data -it --rm falkordb/falkordb:6.0.4`, "
                   "or put your FalkorDB Cloud URL in FALKORDB_URL in the .env file")
 
 
