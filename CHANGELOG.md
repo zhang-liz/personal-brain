@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.4 (2026-11-05)
 
 Changed:
 - The start commands name `falkordb/falkordb:6.0.4`. Tests run on FalkorDB 6.0.4 and 4.22.2.
