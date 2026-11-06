@@ -56,7 +56,9 @@ jobs:
           for image in falkordb/falkordb:6.0.4 falkordb/falkordb:v4.22.2; do
             echo "::group::$image"
             docker run -d --name db -p 6379:6379 "$image"
-            for i in $(seq 1 30); do (exec 3<>/dev/tcp/localhost/6379) 2>/dev/null && break; sleep 1; done
+            # Docker opens the port before FalkorDB runs, so wait for a PONG, not an open port.
+            for i in $(seq 1 30); do [ "$(docker exec db redis-cli ping 2>/dev/null)" = PONG ] && break; sleep 1; done
+            [ "$(docker exec db redis-cli ping)" = PONG ]
             PATH="$PWD/.venv/bin:$PATH" .venv/bin/python -m pytest -x
             docker rm -f db
             echo "::endgroup::"
